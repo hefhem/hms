@@ -1,0 +1,18 @@
+Title,Body,Labels,Milestone
+Scaffold monorepo & CI,"Create repo structure and CI workflows for backend and frontend as per docs.
+Acceptance: CI green on PR; docker-compose up works.","infra,ci",M1
+Provision Identity (Keycloak),"Create realm, clients, roles, MFA (TOTP), and OIDC configs for SPAs/APIs.
+Acceptance: Protected API returns 401/403 without token, 200 with correct roles.","security,identity",M1
+Implement Master Data service,"Entities: Hospital, Department, Ward, Room, Bed, Staff, Service.
+Acceptance: CRUD APIs with pagination/filtering; unique indexes; seed data.","backend,master-data",M1
+Patient Registry (ADT),"Entities: Patient, Encounter, Admission, Transfer, Discharge.
+Acceptance: Create/search patient; start/close encounters; admit/transfer/discharge.","backend,patient",M1
+Scheduling & Appointments,"Create appointment slots, book/cancel, provider schedules.","backend,scheduling",M1
+EHR basics,"Vitals, Clinical Notes (SOAP), Problem list, Diagnoses, Immunizations.","backend,ehr",M2
+CPOE & Lab Orders,Create lab orders; record results; verification workflow; auto-charge on completion.,"backend,orders,lab",M2
+Billing Core,"Price lists, payers, policies, charges, invoices, payments; idempotent payment endpoint.","backend,billing",M2
+Inventory Basics,"Items, stock, GRN, stock decrement on dispense; low-stock events.","backend,inventory",M2
+Pharmacy & eMAR,"Medication orders, eMAR administration records, formulary enforcement.","backend,pharmacy",M3
+Imaging (RIS),"Imaging orders, report, modality metadata, DICOM study link placeholder.","backend,imaging",M3
+Analytics & Reports v1,"Daily census, revenue by dept, claims status, stock levels. Scheduled snapshots.","backend,analytics",M3
+Observability & Audit,"Serilog, OpenTelemetry, dashboards, PHI read/write audit logs.","infra,observability,security",M3

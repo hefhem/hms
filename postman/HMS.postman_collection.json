@@ -1,0 +1,113 @@
+{
+  "info": {
+    "name": "HMS Core APIs (Starter)",
+    "_postman_id": "a1111111-b222-c333-d444-e55555555555",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Patients",
+      "item": [
+        {
+          "name": "Create Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "patients"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mrn\": \"MRN-1001\", \"firstName\": \"Ada\", \"lastName\": \"Lovelace\", \"dob\": \"1990-01-01\", \"gender\": \"F\"}"
+            }
+          }
+        },
+        {
+          "name": "Get Patient by MRN",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/patients?mrn=MRN-1001",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "patients"
+              ],
+              "query": [
+                {
+                  "key": "mrn",
+                  "value": "MRN-1001"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Encounters",
+      "item": [
+        {
+          "name": "Create Encounter (OPD)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/encounters",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "encounters"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"patientId\": \"{GUID}\", \"type\": \"OP\", \"start\": \"2025-01-01T09:00:00Z\"}"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    }
+  ]
+}
