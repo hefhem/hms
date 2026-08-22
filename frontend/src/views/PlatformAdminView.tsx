@@ -5,10 +5,8 @@ import {
   ShieldCheck,
   X,
   Activity,
-  DollarSign,
   Globe,
   Lock,
-  Power,
   Edit2,
   Trash2,
   Mail,
@@ -16,11 +14,13 @@ import {
   Server,
   AlertTriangle,
   Send,
-  Bell,
   Wrench,
   Key,
   ExternalLink,
   LogOut,
+  UserCheck,
+  Check,
+  RefreshCw,
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -32,8 +32,8 @@ export const PlatformAdminView: React.FC = () => {
   const { showToast } = useToast();
 
   // Platform Login State
-  const [email, setEmail] = useState('superadmin@platform.com');
-  const [password, setPassword] = useState('PlatformAdmin@123456');
+  const [loginEmail, setLoginEmail] = useState('superadmin@platform.com');
+  const [loginPassword, setLoginPassword] = useState('Admin@123456');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'subscribers' | 'platform_users' | 'platform_smtp' | 'broadcasts'>('subscribers');
@@ -43,13 +43,40 @@ export const PlatformAdminView: React.FC = () => {
   const [lockingTenant, setLockingTenant] = useState<any>(null);
   const [maintenanceTenant, setMaintenanceTenant] = useState<any>(null);
 
-  // Modals
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  // Platform SMTP State
+  const [smtpConfig, setSmtpConfig] = useState({
+    PLATFORM_SMTP_HOST: 'localhost',
+    PLATFORM_SMTP_PORT: '1025',
+    PLATFORM_SMTP_USER: '',
+    PLATFORM_SMTP_PASS: '',
+    PLATFORM_SMTP_FROM_EMAIL: 'no-reply@platform.clinic.com',
+    PLATFORM_SMTP_FROM_NAME: 'ApexCare SaaS Platform Administrator',
+    PLATFORM_SMTP_SECURE: 'false',
+    PLATFORM_SMTP_HEADER_TEMPLATE: '<div style="font-family: Arial, sans-serif; padding: 20px; background: #0f172a; color: #ffffff; border-radius: 8px;">',
+    PLATFORM_SMTP_FOOTER_TEMPLATE: '<p style="font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 10px; margin-top: 20px;">ApexCare Enterprise SaaS Platform &copy; 2026</p></div>',
+  });
+  const [isSavingSmtp, setIsSavingSmtp] = useState(false);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+
+  // SuperAdmin CRUD Modals & Forms
+  const [isCreateAdminModalOpen, setIsCreateAdminModalOpen] = useState(false);
+  const [editingAdmin, setEditingAdmin] = useState<any>(null);
+  const [resetPassAdmin, setResetPassAdmin] = useState<any>(null);
+  const [deleteAdmin, setDeleteAdmin] = useState<any>(null);
+
+  const [adminForm, setAdminForm] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+  });
+  const [newPasswordInput, setNewPasswordInput] = useState('PlatformAdmin@123456');
+
+  // Tenant Modals & Forms
+  const [isCreateTenantModalOpen, setIsCreateTenantModalOpen] = useState(false);
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
 
-  // Forms
-  const [createForm, setCreateForm] = useState({
+  const [createTenantForm, setCreateTenantForm] = useState({
     name: '',
     subdomain: '',
     currency: 'USD',
@@ -73,6 +100,7 @@ export const PlatformAdminView: React.FC = () => {
   useEffect(() => {
     if (user) {
       fetchData();
+      fetchSmtpSettings();
     }
   }, [user]);
 
@@ -89,11 +117,33 @@ export const PlatformAdminView: React.FC = () => {
     }
   };
 
+  const fetchSmtpSettings = async () => {
+    try {
+      const res = await api.get('/settings');
+      if (res.data) {
+        setSmtpConfig((prev) => ({
+          ...prev,
+          PLATFORM_SMTP_HOST: res.data.PLATFORM_SMTP_HOST || 'localhost',
+          PLATFORM_SMTP_PORT: res.data.PLATFORM_SMTP_PORT || '1025',
+          PLATFORM_SMTP_USER: res.data.PLATFORM_SMTP_USER || '',
+          PLATFORM_SMTP_PASS: res.data.PLATFORM_SMTP_PASS || '',
+          PLATFORM_SMTP_FROM_EMAIL: res.data.PLATFORM_SMTP_FROM_EMAIL || 'no-reply@platform.clinic.com',
+          PLATFORM_SMTP_FROM_NAME: res.data.PLATFORM_SMTP_FROM_NAME || 'ApexCare SaaS Platform Administrator',
+          PLATFORM_SMTP_SECURE: res.data.PLATFORM_SMTP_SECURE || 'false',
+          PLATFORM_SMTP_HEADER_TEMPLATE: res.data.PLATFORM_SMTP_HEADER_TEMPLATE || prev.PLATFORM_SMTP_HEADER_TEMPLATE,
+          PLATFORM_SMTP_FOOTER_TEMPLATE: res.data.PLATFORM_SMTP_FOOTER_TEMPLATE || prev.PLATFORM_SMTP_FOOTER_TEMPLATE,
+        }));
+      }
+    } catch (err: any) {
+      // silent catch
+    }
+  };
+
   const handlePlatformLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
     try {
-      await login(email, password);
+      await login(loginEmail, loginPassword);
       showToast('success', 'SaaS Platform SuperAdmin Authenticated', 'Access granted to Global SaaS Command Center.');
     } catch (err: any) {
       showToast('error', 'Platform Access Denied', err.response?.data?.message || 'Invalid SuperAdmin Credentials');
@@ -102,12 +152,121 @@ export const PlatformAdminView: React.FC = () => {
     }
   };
 
+  // --- Platform SMTP Handlers ---
+  const handleSaveSmtpSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSmtp(true);
+    try {
+      await api.put('/settings', smtpConfig);
+      showToast('success', 'Platform SMTP Gateway Saved', 'Global outbound mail server settings successfully saved.');
+    } catch (err: any) {
+      showToast('error', 'Failed to Save SMTP Settings', err.response?.data?.message || err.message);
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
+
+  const handleTestPlatformSmtp = async () => {
+    setIsTestingSmtp(true);
+    try {
+      await api.post('/settings/test-platform-smtp', {
+        host: smtpConfig.PLATFORM_SMTP_HOST,
+        port: parseInt(smtpConfig.PLATFORM_SMTP_PORT) || 1025,
+        user: smtpConfig.PLATFORM_SMTP_USER,
+        pass: smtpConfig.PLATFORM_SMTP_PASS,
+        secure: smtpConfig.PLATFORM_SMTP_SECURE === 'true',
+        fromEmail: smtpConfig.PLATFORM_SMTP_FROM_EMAIL,
+        fromName: smtpConfig.PLATFORM_SMTP_FROM_NAME,
+        headerTemplate: smtpConfig.PLATFORM_SMTP_HEADER_TEMPLATE,
+        footerTemplate: smtpConfig.PLATFORM_SMTP_FOOTER_TEMPLATE,
+      });
+      showToast('success', 'SMTP Gateway Test Passed', `Dispatched test mail from ${smtpConfig.PLATFORM_SMTP_FROM_EMAIL}`);
+    } catch (err: any) {
+      showToast('error', 'SMTP Test Connection Failed', err.response?.data?.message || err.message);
+    } finally {
+      setIsTestingSmtp(false);
+    }
+  };
+
+  // --- Platform SuperAdmin CRUD Handlers ---
+  const handleCreateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post('/users', {
+        fullName: adminForm.fullName,
+        email: adminForm.email,
+        password: adminForm.password || 'PlatformAdmin@123456',
+        role: 'ADMIN',
+        tenantId: null, // Global Platform SuperAdmin Scope
+        isActive: true,
+      });
+      showToast('success', 'Platform SuperAdmin Created', `Onboarded ${adminForm.fullName} (${adminForm.email})`);
+      setIsCreateAdminModalOpen(false);
+      setAdminForm({ fullName: '', email: '', password: '' });
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'SuperAdmin Creation Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleEditAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAdmin) return;
+    try {
+      await api.put(`/users/${editingAdmin.id}`, {
+        fullName: editingAdmin.fullName,
+        email: editingAdmin.email,
+      });
+      showToast('success', 'SuperAdmin Profile Updated', `Updated ${editingAdmin.fullName}`);
+      setEditingAdmin(null);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Profile Update Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleToggleAdminStatus = async (userObj: any) => {
+    try {
+      const nextState = !userObj.isActive;
+      await api.put(`/users/${userObj.id}/status`, { isActive: nextState });
+      showToast('success', 'SuperAdmin Status Updated', `Account is now ${nextState ? 'ACTIVE' : 'INACTIVE'}`);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Status Toggle Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleResetAdminPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPassAdmin) return;
+    try {
+      await api.put(`/users/${resetPassAdmin.id}/reset-password`, { newPassword: newPasswordInput });
+      showToast('success', 'Password Reset Successful', `Updated password for ${resetPassAdmin.fullName}`);
+      setResetPassAdmin(null);
+    } catch (err: any) {
+      showToast('error', 'Password Reset Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleDeleteAdmin = async () => {
+    if (!deleteAdmin) return;
+    try {
+      await api.delete(`/users/${deleteAdmin.id}`);
+      showToast('success', 'SuperAdmin Account Deleted', `Removed ${deleteAdmin.fullName}`);
+      setDeleteAdmin(null);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Deletion Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  // --- Tenant Handlers ---
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/tenants', createForm);
-      showToast('success', 'Subscriber Workspace Provisioned', `Created workspace '${createForm.name}' on '${createForm.subdomain}.clinic.com'`);
-      setIsCreateModalOpen(false);
+      await api.post('/tenants', createTenantForm);
+      showToast('success', 'Subscriber Workspace Provisioned', `Created workspace '${createTenantForm.name}' on '${createTenantForm.subdomain}.clinic.com'`);
+      setIsCreateTenantModalOpen(false);
       fetchData();
     } catch (err: any) {
       showToast('error', 'Provisioning Failed', err.response?.data?.message || err.message);
@@ -162,7 +321,7 @@ export const PlatformAdminView: React.FC = () => {
 
   const isPlatformAdmin = user && (user.email === 'superadmin@platform.com' || !user.tenantId);
 
-  // If user is not authenticated or not a Platform Admin, render Dedicated Platform Login
+  // Render Dedicated Platform Login if not authenticated as Platform SuperAdmin
   if (!user || !isPlatformAdmin) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-6 text-slate-100">
@@ -182,8 +341,8 @@ export const PlatformAdminView: React.FC = () => {
               <label className="block text-xs font-semibold text-slate-400 mb-1">SuperAdmin Email</label>
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
                 required
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
               />
@@ -192,8 +351,8 @@ export const PlatformAdminView: React.FC = () => {
               <label className="block text-xs font-semibold text-slate-400 mb-1">Master Access Key</label>
               <input
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
                 required
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
               />
@@ -226,6 +385,8 @@ export const PlatformAdminView: React.FC = () => {
       </div>
     );
   }
+
+  const superAdminsList = users.filter((u) => !u.tenantId);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -282,7 +443,7 @@ export const PlatformAdminView: React.FC = () => {
               Launch Hospital Workspace
             </a>
             <button
-              onClick={() => setIsCreateModalOpen(true)}
+              onClick={() => setIsCreateTenantModalOpen(true)}
               className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-cyan-950 transition-all"
             >
               <Plus className="w-4 h-4" />
@@ -314,7 +475,7 @@ export const PlatformAdminView: React.FC = () => {
               }`}
             >
               <Users className="w-4 h-4" />
-              Platform SuperAdmins ({users.filter((u) => !u.tenantId).length})
+              Platform SuperAdmins ({superAdminsList.length})
             </button>
             <button
               onClick={() => setActiveTab('platform_smtp')}
@@ -325,7 +486,7 @@ export const PlatformAdminView: React.FC = () => {
               }`}
             >
               <Server className="w-4 h-4" />
-              Platform System SMTP
+              Global Platform Outbound SMTP
             </button>
             <button
               onClick={() => setActiveTab('broadcasts')}
@@ -335,7 +496,7 @@ export const PlatformAdminView: React.FC = () => {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
-              <Bell className="w-4 h-4" />
+              <Send className="w-4 h-4" />
               Tenant Notifications & Broadcasts
             </button>
           </div>
@@ -449,69 +610,243 @@ export const PlatformAdminView: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 2: Platform Users */}
+        {/* Tab 2: Full Platform SuperAdmin CRUD */}
         {activeTab === 'platform_users' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-            <h3 className="font-extrabold text-white text-base">Global Platform SuperAdmins</h3>
-            <div className="divide-y divide-slate-800">
-              {users
-                .filter((u) => !u.tenantId)
-                .map((u) => (
-                  <div key={u.id} className="py-4 flex items-center justify-between">
-                    <div>
-                      <div className="font-bold text-white text-sm">{u.fullName}</div>
-                      <div className="text-xs text-cyan-400 font-mono">{u.email}</div>
-                    </div>
-                    <span className="bg-cyan-950 text-cyan-400 text-xs font-bold px-3 py-1 rounded-xl border border-cyan-500/30">
-                      SUPERADMIN (Global Scope)
-                    </span>
-                  </div>
-                ))}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                  <Users className="w-5 h-5 text-cyan-400" /> Global Platform SuperAdmin Directory
+                </h3>
+                <p className="text-xs text-slate-400">Manage high-privilege administrators with global multi-tenant access.</p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setAdminForm({ fullName: '', email: '', password: '' });
+                  setIsCreateAdminModalOpen(true);
+                }}
+                className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-cyan-950 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Add Platform SuperAdmin
+              </button>
+            </div>
+
+            {/* SuperAdmin Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono tracking-wider">
+                    <th className="py-3 px-4">SuperAdmin Name</th>
+                    <th className="py-3 px-4">Email Address</th>
+                    <th className="py-3 px-4">Scope & Role</th>
+                    <th className="py-3 px-4">Account Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 font-sans">
+                  {superAdminsList.map((admin) => (
+                    <tr key={admin.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-cyan-950 text-cyan-400 border border-cyan-500/30 flex items-center justify-center font-bold text-xs">
+                          {admin.fullName.charAt(0)}
+                        </div>
+                        {admin.fullName}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-cyan-400">{admin.email}</td>
+                      <td className="py-3.5 px-4">
+                        <span className="bg-cyan-950 text-cyan-400 border border-cyan-500/30 px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold">
+                          GLOBAL SUPERADMIN
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <button
+                          onClick={() => handleToggleAdminStatus(admin)}
+                          className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
+                            admin.isActive !== false
+                              ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                              : 'bg-rose-950 text-rose-400 border-rose-800'
+                          }`}
+                        >
+                          {admin.isActive !== false ? '● ACTIVE' : '○ INACTIVE'}
+                        </button>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setEditingAdmin(admin)}
+                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                            title="Edit Profile"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setResetPassAdmin(admin);
+                              setNewPasswordInput('PlatformAdmin@123456');
+                            }}
+                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg transition-colors"
+                            title="Reset Master Password"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteAdmin(admin)}
+                            className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
+                            title="Delete SuperAdmin Account"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
-        {/* Tab 3: Platform System SMTP */}
+        {/* Tab 3: Complete Global Platform System SMTP Configuration */}
         {activeTab === 'platform_smtp' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 max-w-2xl">
-            <h3 className="font-extrabold text-white text-base">Global Platform Outbound SMTP Relay</h3>
-            <p className="text-xs text-slate-400">
-              Configures the platform-wide SMTP mail gateway used for sending tenant welcome invitations, billing receipts, and platform security alerts.
-            </p>
-            <div className="space-y-4 pt-2">
-              <div className="grid grid-cols-2 gap-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6 max-w-3xl">
+            <div className="border-b border-slate-800 pb-4">
+              <h3 className="font-extrabold text-white text-lg flex items-center gap-2">
+                <Server className="w-5 h-5 text-cyan-400" /> Global Platform Outbound SMTP Relay Configuration
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Configure the master outbound SMTP mail gateway used for platform invitations, subscription billing notices, tenant lock alerts, and security confirmations.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveSmtpSettings} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-slate-400 font-semibold mb-1">SMTP Host</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">SMTP Host Server</label>
                   <input
                     type="text"
-                    defaultValue="localhost"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white"
+                    required
+                    value={smtpConfig.PLATFORM_SMTP_HOST}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, PLATFORM_SMTP_HOST: e.target.value })}
+                    placeholder="e.g. smtp.mailtrap.io or localhost"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 font-semibold mb-1">SMTP Port</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">SMTP Port</label>
                   <input
                     type="number"
-                    defaultValue="1025"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white"
+                    required
+                    value={smtpConfig.PLATFORM_SMTP_PORT}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, PLATFORM_SMTP_PORT: e.target.value })}
+                    placeholder="e.g. 1025, 587, 465"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono"
                   />
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">SMTP Username</label>
+                  <input
+                    type="text"
+                    value={smtpConfig.PLATFORM_SMTP_USER}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, PLATFORM_SMTP_USER: e.target.value })}
+                    placeholder="Optional SMTP Username"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">SMTP Password</label>
+                  <input
+                    type="password"
+                    value={smtpConfig.PLATFORM_SMTP_PASS}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, PLATFORM_SMTP_PASS: e.target.value })}
+                    placeholder="••••••••••••"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Platform Sender Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={smtpConfig.PLATFORM_SMTP_FROM_EMAIL}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, PLATFORM_SMTP_FROM_EMAIL: e.target.value })}
+                    placeholder="no-reply@platform.clinic.com"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Sender Display Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={smtpConfig.PLATFORM_SMTP_FROM_NAME}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, PLATFORM_SMTP_FROM_NAME: e.target.value })}
+                    placeholder="ApexCare SaaS Platform Administrator"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs text-slate-400 font-semibold mb-1">Platform Sender Email</label>
-                <input
-                  type="email"
-                  defaultValue="no-reply@platform.clinic.com"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white"
+                <label className="block text-xs font-semibold text-slate-400 mb-1">SSL / TLS Encryption Protocol</label>
+                <select
+                  value={smtpConfig.PLATFORM_SMTP_SECURE}
+                  onChange={(e) => setSmtpConfig({ ...smtpConfig, PLATFORM_SMTP_SECURE: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white"
+                >
+                  <option value="false">Disabled / TLS StartTLS (Default Port 1025 / 587)</option>
+                  <option value="true">Enabled / Direct SSL/TLS Encrypted (Port 465)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Global HTML Email Header Template</label>
+                <textarea
+                  value={smtpConfig.PLATFORM_SMTP_HEADER_TEMPLATE}
+                  onChange={(e) => setSmtpConfig({ ...smtpConfig, PLATFORM_SMTP_HEADER_TEMPLATE: e.target.value })}
+                  rows={2}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white font-mono"
                 />
               </div>
-              <button
-                onClick={() => showToast('success', 'SMTP Relay Verified', 'Platform mail relay connection test successful.')}
-                className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-lg shadow-cyan-950"
-              >
-                Test Platform SMTP Relay Connection
-              </button>
-            </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Global HTML Email Footer Template</label>
+                <textarea
+                  value={smtpConfig.PLATFORM_SMTP_FOOTER_TEMPLATE}
+                  onChange={(e) => setSmtpConfig({ ...smtpConfig, PLATFORM_SMTP_FOOTER_TEMPLATE: e.target.value })}
+                  rows={2}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-between border-t border-slate-800 gap-4">
+                <button
+                  type="button"
+                  onClick={handleTestPlatformSmtp}
+                  disabled={isTestingSmtp}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isTestingSmtp ? 'animate-spin' : ''}`} />
+                  {isTestingSmtp ? 'Testing Mail Gateway...' : 'Test Platform SMTP Relay Connection'}
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSavingSmtp}
+                  className="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-950 transition-all flex items-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  {isSavingSmtp ? 'Saving Gateway Settings...' : 'Save Platform SMTP Settings'}
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
@@ -584,13 +919,220 @@ export const PlatformAdminView: React.FC = () => {
         )}
       </main>
 
-      {/* Provision Modal */}
-      {isCreateModalOpen && (
+      {/* --- MODALS --- */}
+
+      {/* Create SuperAdmin Modal */}
+      {isCreateAdminModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-white text-base">Onboard New Platform SuperAdmin</h3>
+              <button onClick={() => setIsCreateAdminModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAdmin} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Alexander Vance"
+                  value={adminForm.fullName}
+                  onChange={(e) => setAdminForm({ ...adminForm, fullName: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">SuperAdmin Email Address</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. Vance@platform.com"
+                  value={adminForm.email}
+                  onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Master Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="PlatformAdmin@123456"
+                  value={adminForm.password}
+                  onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateAdminModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-950"
+                >
+                  Create SuperAdmin
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit SuperAdmin Modal */}
+      {editingAdmin && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-white text-base">Edit SuperAdmin Profile</h3>
+              <button onClick={() => setEditingAdmin(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditAdmin} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editingAdmin.fullName}
+                  onChange={(e) => setEditingAdmin({ ...editingAdmin, fullName: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={editingAdmin.email}
+                  onChange={(e) => setEditingAdmin({ ...editingAdmin, email: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingAdmin(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl"
+                >
+                  Save Profile
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reset SuperAdmin Password Modal */}
+      {resetPassAdmin && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-white text-base">Reset SuperAdmin Password</h3>
+              <button onClick={() => setResetPassAdmin(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetAdminPassword} className="space-y-4">
+              <p className="text-xs text-slate-300">
+                Update access password for SuperAdmin <strong className="text-white">{resetPassAdmin.fullName}</strong>.
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">New Password</label>
+                <input
+                  type="text"
+                  required
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResetPassAdmin(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl shadow-lg"
+                >
+                  Confirm Reset
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete SuperAdmin Modal */}
+      {deleteAdmin && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-rose-400 text-base">Delete SuperAdmin Account</h3>
+              <button onClick={() => setDeleteAdmin(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to permanently delete SuperAdmin account{' '}
+              <strong className="text-white">{deleteAdmin.fullName}</strong> ({deleteAdmin.email})?
+            </p>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteAdmin(null)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAdmin}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-rose-950"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provision Tenant Modal */}
+      {isCreateTenantModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-extrabold text-white text-base">Provision Subscriber Hospital Workspace</h3>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsCreateTenantModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -602,8 +1144,8 @@ export const PlatformAdminView: React.FC = () => {
                   type="text"
                   required
                   placeholder="e.g. Saint Nicholas Specialist Hospital"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                  value={createTenantForm.name}
+                  onChange={(e) => setCreateTenantForm({ ...createTenantForm, name: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                 />
               </div>
@@ -615,16 +1157,16 @@ export const PlatformAdminView: React.FC = () => {
                     type="text"
                     required
                     placeholder="stnicholas"
-                    value={createForm.subdomain}
-                    onChange={(e) => setCreateForm({ ...createForm, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                    value={createTenantForm.subdomain}
+                    onChange={(e) => setCreateTenantForm({ ...createTenantForm, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Operating Currency</label>
                   <select
-                    value={createForm.currency}
-                    onChange={(e) => setCreateForm({ ...createForm, currency: e.target.value })}
+                    value={createTenantForm.currency}
+                    onChange={(e) => setCreateTenantForm({ ...createTenantForm, currency: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                   >
                     <option value="NGN">NGN (₦ - Nigerian Naira)</option>
@@ -639,8 +1181,8 @@ export const PlatformAdminView: React.FC = () => {
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Subscription Plan</label>
                   <select
-                    value={createForm.plan}
-                    onChange={(e) => setCreateForm({ ...createForm, plan: e.target.value })}
+                    value={createTenantForm.plan}
+                    onChange={(e) => setCreateTenantForm({ ...createTenantForm, plan: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                   >
                     <option value="STARTER">Starter Tier</option>
@@ -652,8 +1194,8 @@ export const PlatformAdminView: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Max User Quota</label>
                   <input
                     type="number"
-                    value={createForm.maxUsers}
-                    onChange={(e) => setCreateForm({ ...createForm, maxUsers: parseInt(e.target.value) || 10 })}
+                    value={createTenantForm.maxUsers}
+                    onChange={(e) => setCreateTenantForm({ ...createTenantForm, maxUsers: parseInt(e.target.value) || 10 })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                   />
                 </div>
@@ -663,8 +1205,8 @@ export const PlatformAdminView: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Contact Email</label>
                 <input
                   type="email"
-                  value={createForm.contactEmail}
-                  onChange={(e) => setCreateForm({ ...createForm, contactEmail: e.target.value })}
+                  value={createTenantForm.contactEmail}
+                  onChange={(e) => setCreateTenantForm({ ...createTenantForm, contactEmail: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                 />
               </div>
@@ -672,7 +1214,7 @@ export const PlatformAdminView: React.FC = () => {
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
+                  onClick={() => setIsCreateTenantModalOpen(false)}
                   className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
                 >
                   Cancel

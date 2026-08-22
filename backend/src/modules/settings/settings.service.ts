@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from './entities/setting.entity';
 import { Invoice } from '../billing/entities/invoice.entity';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class SettingsService {
@@ -11,6 +12,7 @@ export class SettingsService {
     private settingsRepository: Repository<Setting>,
     @InjectRepository(Invoice)
     private invoiceRepository: Repository<Invoice>,
+    private notificationService: NotificationService,
   ) {}
 
   async getAllSettings(): Promise<Record<string, string>> {
@@ -19,6 +21,13 @@ export class SettingsService {
       CURRENCY_SYMBOL: '$',
       CURRENCY_CODE: 'USD',
       CLINIC_NAME: 'ApexCare HMS Enterprise',
+      PLATFORM_SMTP_HOST: 'localhost',
+      PLATFORM_SMTP_PORT: '1025',
+      PLATFORM_SMTP_USER: '',
+      PLATFORM_SMTP_PASS: '',
+      PLATFORM_SMTP_FROM_EMAIL: 'no-reply@platform.clinic.com',
+      PLATFORM_SMTP_FROM_NAME: 'ApexCare SaaS Platform Administrator',
+      PLATFORM_SMTP_SECURE: 'false',
     };
 
     const hasTx = (await this.invoiceRepository.count()) > 0;
@@ -36,7 +45,6 @@ export class SettingsService {
   }
 
   async updateSettings(data: Record<string, string>): Promise<Record<string, string>> {
-    // Check financial ledger protection rule
     const isModifyingCurrency = data.CURRENCY_SYMBOL !== undefined || data.CURRENCY_CODE !== undefined;
 
     if (isModifyingCurrency) {
@@ -61,5 +69,20 @@ export class SettingsService {
     }
 
     return await this.getAllSettings();
+  }
+
+  async testPlatformSmtp(data: {
+    host: string;
+    port: number;
+    user?: string;
+    pass?: string;
+    secure?: boolean;
+    fromEmail: string;
+    fromName?: string;
+    headerTemplate?: string;
+    footerTemplate?: string;
+    testRecipient?: string;
+  }) {
+    return await this.notificationService.sendCustomSmtpTest(data);
   }
 }

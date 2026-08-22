@@ -84,6 +84,53 @@ export class NotificationService {
     }
   }
 
+  async sendCustomSmtpTest(config: {
+    host: string;
+    port: number;
+    user?: string;
+    pass?: string;
+    secure?: boolean;
+    fromEmail: string;
+    fromName?: string;
+    headerTemplate?: string;
+    footerTemplate?: string;
+    testRecipient?: string;
+  }) {
+    const testTransporter = nodemailer.createTransport({
+      host: config.host || 'localhost',
+      port: config.port || 1025,
+      secure: !!config.secure,
+      auth: config.user ? { user: config.user, pass: config.pass || '' } : undefined,
+      ignoreTLS: !config.secure,
+    });
+
+    const recipient = config.testRecipient || config.fromEmail || 'admin@clinic.com';
+    const header = config.headerTemplate || '<div style="font-family: Arial, sans-serif; padding: 20px; background: #0f172a; color: #ffffff; border-radius: 8px;">';
+    const footer = config.footerTemplate || '<p style="font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 10px; margin-top: 20px;">ApexCare Enterprise SaaS Platform &copy; 2026</p></div>';
+
+    const htmlBody = `
+      ${header}
+      <h2 style="color: #38bdf8; margin-top: 0;">SaaS Platform Outbound SMTP Relay Test</h2>
+      <p>This is a live test notification generated from your <strong>Global SaaS Platform SuperAdmin Command Center</strong>.</p>
+      <div style="background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; font-family: monospace; color: #38bdf8;">
+        <p style="margin: 4px 0;"><strong>SMTP Host:</strong> ${config.host}:${config.port}</p>
+        <p style="margin: 4px 0;"><strong>Outbound Sender:</strong> "${config.fromName || 'SaaS Platform Admin'}" &lt;${config.fromEmail}&gt;</p>
+        <p style="margin: 4px 0;"><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+        <p style="margin: 4px 0;"><strong>Status:</strong> Gateway Verified & Operational</p>
+      </div>
+      ${footer}
+    `;
+
+    await testTransporter.sendMail({
+      from: `"${config.fromName || 'SaaS Platform Admin'}" <${config.fromEmail}>`,
+      to: recipient,
+      subject: '✅ Global Platform SMTP Outbound Relay Verification',
+      html: htmlBody,
+    });
+
+    return { success: true, message: `Live SMTP test email successfully dispatched to ${recipient}` };
+  }
+
   async sendWelcomeEmail(recipientEmail: string, recipientName: string, role: string, tempPass: string) {
     const subject = 'Welcome to ApexCare Enterprise HMS - Staff Account Credentials';
     const text = `Dear ${recipientName},\n\nWelcome to ApexCare HMS. Your staff account has been created with role: ${role}.\n\nLogin Email: ${recipientEmail}\nTemporary Password: ${tempPass}\n\nPlease change your password upon your first login.\n\nRegards,\nApexCare System Administrator`;

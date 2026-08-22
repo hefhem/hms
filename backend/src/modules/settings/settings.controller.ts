@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, UseGuards } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -19,5 +19,22 @@ export class SettingsController {
   @Roles(UserRole.ADMIN)
   async updateSettings(@Body() body: Record<string, string>) {
     return this.settingsService.updateSettings(body);
+  }
+
+  @Post('test-platform-smtp')
+  @Roles(UserRole.ADMIN)
+  async testPlatformSmtp(@Body() body: {
+    host: string;
+    port: number;
+    user?: string;
+    pass?: string;
+    secure?: boolean;
+    fromEmail: string;
+    fromName?: string;
+    headerTemplate?: string;
+    footerTemplate?: string;
+    testRecipient?: string;
+  }) {
+    return this.settingsService.testPlatformSmtp(body);
   }
 }
