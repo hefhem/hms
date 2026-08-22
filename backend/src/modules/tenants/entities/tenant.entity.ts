@@ -60,6 +60,18 @@ export class Tenant {
   @Column({ default: 50 })
   maxUsers: number;
 
+  @Column({ default: 500 })
+  maxPatientsQuota: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  subscriptionStartDate: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  subscriptionEndDate: Date;
+
+  @Column({ default: 'ACTIVE' })
+  subscriptionStatus: string; // ACTIVE, DUE, OVERDUE, EXPIRED
+
   @Column({ nullable: true })
   contactEmail: string;
 

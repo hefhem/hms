@@ -19,6 +19,14 @@ import {
   LogOut,
   Check,
   RefreshCw,
+  CreditCard,
+  Layers,
+  Calendar,
+  DollarSign,
+  UserCheck,
+  Zap,
+  Clock,
+  Mail,
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -34,14 +42,42 @@ export const PlatformAdminView: React.FC = () => {
   const [loginPassword, setLoginPassword] = useState('Admin@123456');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'subscribers' | 'platform_users' | 'platform_smtp' | 'broadcasts'>('subscribers');
+  const [activeTab, setActiveTab] = useState<'subscribers' | 'plans' | 'invoices' | 'platform_users' | 'platform_smtp' | 'broadcasts'>('subscribers');
 
   const [tenants, setTenants] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+
+  // Modals & Forms State
   const [lockingTenant, setLockingTenant] = useState<any>(null);
   const [maintenanceTenant, setMaintenanceTenant] = useState<any>(null);
   const [editingTenant, setEditingTenant] = useState<any>(null);
   const [deletingTenant, setDeletingTenant] = useState<any>(null);
+  const [renewingTenant, setRenewingTenant] = useState<any>(null);
+
+  // Subscription Renewal Form
+  const [renewalForm, setRenewalForm] = useState({
+    planCode: 'PROFESSIONAL',
+    durationDays: 30,
+    paymentMethod: 'SUPERADMIN_MANUAL_RENEWAL',
+  });
+
+  // Subscription Plan Tier CRUD State
+  const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<any>(null);
+  const [deletingPlan, setDeletingPlan] = useState<any>(null);
+
+  const [planForm, setPlanForm] = useState({
+    code: '',
+    name: '',
+    pricePerMonth: 299,
+    billingCycleDays: 30,
+    maxPatientsQuota: 2000,
+    maxUsersQuota: 50,
+    features: 'EMR, Appointments, Billing, Pharmacy, Lab',
+    isActive: true,
+  });
 
   // Platform SMTP State
   const [smtpConfig, setSmtpConfig] = useState({
@@ -82,6 +118,7 @@ export const PlatformAdminView: React.FC = () => {
     currency: 'USD',
     plan: 'PROFESSIONAL',
     maxUsers: 50,
+    maxPatientsQuota: 2000,
     contactEmail: '',
     contactPhone: '',
   });
@@ -106,12 +143,16 @@ export const PlatformAdminView: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [tRes, uRes] = await Promise.all([
+      const [tRes, uRes, pRes, iRes] = await Promise.all([
         api.get('/tenants'),
         api.get('/users'),
+        api.get('/tenants/plans'),
+        api.get('/tenants/invoices/all'),
       ]);
       setTenants(tRes.data);
       setUsers(uRes.data);
+      setPlans(pRes.data);
+      setInvoices(iRes.data);
     } catch (err: any) {
       showToast('error', 'Error Loading Platform Data', err.message);
     }
@@ -149,6 +190,89 @@ export const PlatformAdminView: React.FC = () => {
       showToast('error', 'Platform Access Denied', err.response?.data?.message || 'Invalid SuperAdmin Credentials');
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  // --- Subscription Plan Tier CRUD Handlers ---
+  const handleCreatePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const featArr = planForm.features.split(',').map((f) => f.trim()).filter(Boolean);
+      await api.post('/tenants/plans', {
+        ...planForm,
+        code: planForm.code.toUpperCase(),
+        features: featArr,
+      });
+      showToast('success', 'Subscription Plan Tier Created', `Created Plan '${planForm.name}' (${planForm.code})`);
+      setIsCreatePlanModalOpen(false);
+      setPlanForm({
+        code: '',
+        name: '',
+        pricePerMonth: 299,
+        billingCycleDays: 30,
+        maxPatientsQuota: 2000,
+        maxUsersQuota: 50,
+        features: 'EMR, Appointments, Billing, Pharmacy, Lab',
+        isActive: true,
+      });
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Plan Creation Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleEditPlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPlan) return;
+    try {
+      const featArr = typeof editingPlan.features === 'string'
+        ? editingPlan.features.split(',').map((f: string) => f.trim()).filter(Boolean)
+        : editingPlan.features;
+
+      await api.put(`/tenants/plans/${editingPlan.id}`, {
+        name: editingPlan.name,
+        pricePerMonth: parseFloat(editingPlan.pricePerMonth),
+        billingCycleDays: parseInt(editingPlan.billingCycleDays),
+        maxPatientsQuota: parseInt(editingPlan.maxPatientsQuota),
+        maxUsersQuota: parseInt(editingPlan.maxUsersQuota),
+        features: featArr,
+        isActive: editingPlan.isActive,
+      });
+      showToast('success', 'Plan Tier Updated', `Updated '${editingPlan.name}'`);
+      setEditingPlan(null);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Plan Update Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleDeletePlan = async () => {
+    if (!deletingPlan) return;
+    try {
+      await api.delete(`/tenants/plans/${deletingPlan.id}`);
+      showToast('success', 'Plan Tier Deleted', `Removed '${deletingPlan.name}'`);
+      setDeletingPlan(null);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Plan Deletion Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  // --- Subscription Renewal Handlers ---
+  const handleRenewSubscription = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renewingTenant) return;
+    try {
+      await api.post(`/tenants/${renewingTenant.id}/renew`, renewalForm);
+      showToast(
+        'success',
+        'Subscription Renewed & Invoice Dispatched',
+        `Renewed ${renewingTenant.name} under ${renewalForm.planCode} plan for ${renewalForm.durationDays} days.`,
+      );
+      setRenewingTenant(null);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Renewal Failed', err.response?.data?.message || err.message);
     }
   };
 
@@ -265,7 +389,11 @@ export const PlatformAdminView: React.FC = () => {
     e.preventDefault();
     try {
       await api.post('/tenants', createTenantForm);
-      showToast('success', 'Subscriber Workspace Provisioned', `Created workspace '${createTenantForm.name}' on '${createTenantForm.subdomain}.clinic.com'`);
+      showToast(
+        'success',
+        'Subscriber Workspace Provisioned & Welcome Email Sent',
+        `Provisioned '${createTenantForm.name}'. Dispatched credentials to ${createTenantForm.contactEmail || 'admin@' + createTenantForm.subdomain + '.com'}`,
+      );
       setIsCreateTenantModalOpen(false);
       fetchData();
     } catch (err: any) {
@@ -283,6 +411,7 @@ export const PlatformAdminView: React.FC = () => {
         currency: editingTenant.currency,
         plan: editingTenant.plan,
         maxUsers: parseInt(editingTenant.maxUsers) || 50,
+        maxPatientsQuota: parseInt(editingTenant.maxPatientsQuota) || 2000,
         contactEmail: editingTenant.contactEmail,
         contactPhone: editingTenant.contactPhone,
       });
@@ -461,7 +590,7 @@ export const PlatformAdminView: React.FC = () => {
           <div className="space-y-1">
             <h2 className="text-xl font-extrabold text-white tracking-tight">SaaS Multi-Tenant Management Engine</h2>
             <p className="text-xs text-slate-400">
-              Provision subscriber hospital workspaces, enforce security locking, manage platform SMTP gateways, and issue global announcements.
+              Provision subscriber hospital workspaces, enforce subscription tiers & patient quotas, manage platform SMTP gateways, and process billing renewals.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -485,7 +614,7 @@ export const PlatformAdminView: React.FC = () => {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 overflow-x-auto">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('subscribers')}
@@ -497,6 +626,28 @@ export const PlatformAdminView: React.FC = () => {
             >
               <Building2 className="w-4 h-4" />
               Subscriber Workspaces ({tenants.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('plans')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'plans'
+                  ? 'bg-cyan-950 text-cyan-400 border border-cyan-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              Subscription Plan Tiers ({plans.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('invoices')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'invoices'
+                  ? 'bg-cyan-950 text-cyan-400 border border-cyan-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <CreditCard className="w-4 h-4" />
+              Subscription Billing ({invoices.length})
             </button>
             <button
               onClick={() => setActiveTab('platform_users')}
@@ -518,7 +669,7 @@ export const PlatformAdminView: React.FC = () => {
               }`}
             >
               <Server className="w-4 h-4" />
-              Global Platform Outbound SMTP
+              Global Outbound SMTP Relay
             </button>
             <button
               onClick={() => setActiveTab('broadcasts')}
@@ -529,7 +680,7 @@ export const PlatformAdminView: React.FC = () => {
               }`}
             >
               <Send className="w-4 h-4" />
-              Tenant Notifications & Broadcasts
+              Broadcast Announcements
             </button>
           </div>
 
@@ -540,7 +691,7 @@ export const PlatformAdminView: React.FC = () => {
           />
         </div>
 
-        {/* Tab 1: Subscriber Workspaces Full CRUD */}
+        {/* Tab 1: Subscriber Workspaces */}
         {activeTab === 'subscribers' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {tenants.map((t) => (
@@ -557,7 +708,7 @@ export const PlatformAdminView: React.FC = () => {
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <span className="text-[10px] font-mono font-bold text-cyan-400 bg-cyan-950 px-2.5 py-1 rounded-md border border-cyan-500/30 uppercase tracking-wider">
-                      {t.plan} Plan ({t.currency})
+                      {t.plan} Tier ({t.currency})
                     </span>
                     <h3 className="font-extrabold text-white text-base tracking-tight pt-1">{t.name}</h3>
                     <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
@@ -567,6 +718,20 @@ export const PlatformAdminView: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setRenewingTenant(t);
+                        setRenewalForm({
+                          planCode: t.plan || 'PROFESSIONAL',
+                          durationDays: 30,
+                          paymentMethod: 'SUPERADMIN_MANUAL_RENEWAL',
+                        });
+                      }}
+                      className="p-1.5 bg-cyan-950 hover:bg-cyan-900 text-cyan-400 rounded-lg transition-colors border border-cyan-500/30"
+                      title="Renew Subscription & Process Billing"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       onClick={() => setEditingTenant({ ...t })}
                       className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
@@ -586,13 +751,22 @@ export const PlatformAdminView: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-3 text-xs bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 font-mono">
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Contact Email</span>
-                    <span className="text-slate-300 font-semibold truncate block">{t.contactEmail || 'N/A'}</span>
+                    <span className="text-slate-500 block text-[10px]">Patient Onboarding Quota</span>
+                    <span className="text-cyan-400 font-semibold">{t.maxPatientsQuota || 2000} Max Patients</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">User Quota</span>
-                    <span className="text-slate-300 font-semibold">{t.maxUsers} Accounts</span>
+                    <span className="text-slate-500 block text-[10px]">User Staff Quota</span>
+                    <span className="text-slate-300 font-semibold">{t.maxUsers} Staff Accounts</span>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-mono bg-slate-950/40 px-3 py-2 rounded-xl border border-slate-800/60">
+                  <span className="text-slate-400 flex items-center gap-1 text-[11px]">
+                    <Clock className="w-3.5 h-3.5 text-cyan-400" /> Subscription Expires:
+                  </span>
+                  <span className="text-amber-400 font-bold">
+                    {t.subscriptionEndDate ? new Date(t.subscriptionEndDate).toLocaleDateString() : 'N/A'}
+                  </span>
                 </div>
 
                 {t.isLocked && t.lockReason && (
@@ -643,7 +817,156 @@ export const PlatformAdminView: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 2: Full Platform SuperAdmin CRUD */}
+        {/* Tab 2: Subscription Plan Tiers CRUD */}
+        {activeTab === 'plans' && (
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-cyan-400" /> Subscription Plan Tiers & Quota Configurations
+                </h3>
+                <p className="text-xs text-slate-400">Configure monthly fees, billing cycle duration, staff account limits, and maximum patient onboarding quotas.</p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setPlanForm({
+                    code: '',
+                    name: '',
+                    pricePerMonth: 299,
+                    billingCycleDays: 30,
+                    maxPatientsQuota: 2000,
+                    maxUsersQuota: 50,
+                    features: 'EMR, Appointments, Billing, Pharmacy, Lab',
+                    isActive: true,
+                  });
+                  setIsCreatePlanModalOpen(true);
+                }}
+                className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-cyan-950 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Add New Subscription Plan Tier
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {plans.map((p) => (
+                <div key={p.id} className="bg-slate-950/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="bg-cyan-950 text-cyan-400 border border-cyan-500/30 text-[10px] font-mono font-bold px-2.5 py-1 rounded-md uppercase">
+                        {p.code}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setEditingPlan({ ...p, features: Array.isArray(p.features) ? p.features.join(', ') : p.features })}
+                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeletingPlan(p)}
+                          className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-extrabold text-white text-lg">{p.name}</h4>
+                      <div className="text-2xl font-black text-cyan-400 mt-1">
+                        ${p.pricePerMonth} <span className="text-xs text-slate-400 font-normal">/ {p.billingCycleDays} Days</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2 text-xs font-mono border-t border-slate-800/80">
+                      <div className="flex items-center justify-between text-slate-300">
+                        <span className="text-slate-500">Max Patient Quota:</span>
+                        <span className="text-cyan-400 font-bold">{p.maxPatientsQuota} Patients</span>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-300">
+                        <span className="text-slate-500">Max Staff Quota:</span>
+                        <span className="text-slate-200 font-bold">{p.maxUsersQuota} Accounts</span>
+                      </div>
+                    </div>
+
+                    {p.features && (
+                      <div className="pt-2 space-y-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Included Modules</span>
+                        <div className="flex flex-wrap gap-1">
+                          {(Array.isArray(p.features) ? p.features : p.features.split(',')).map((f: string, idx: number) => (
+                            <span key={idx} className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-md border border-slate-700">
+                              ✓ {f.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Subscription Billing & Invoices */}
+        {activeTab === 'invoices' && (
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-cyan-400" /> Subscription Billing Ledger & Digital Receipts
+                </h3>
+                <p className="text-xs text-slate-400">Track tenant subscription invoices, overdue payments, and manual billing renewals.</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono tracking-wider">
+                    <th className="py-3 px-4">Invoice #</th>
+                    <th className="py-3 px-4">Subscriber Hospital</th>
+                    <th className="py-3 px-4">Plan Tier</th>
+                    <th className="py-3 px-4">Amount Paid</th>
+                    <th className="py-3 px-4">Payment Method</th>
+                    <th className="py-3 px-4">Issue Date</th>
+                    <th className="py-3 px-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 font-sans">
+                  {invoices.map((inv) => {
+                    const tenant = tenants.find((t) => t.id === inv.tenantId);
+                    return (
+                      <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-cyan-400">{inv.invoiceNumber}</td>
+                        <td className="py-3.5 px-4 font-bold text-white">{tenant ? tenant.name : inv.tenantId.slice(0, 8)}</td>
+                        <td className="py-3.5 px-4">
+                          <span className="bg-cyan-950 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold">
+                            {inv.planCode}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">
+                          {inv.currency || 'USD'} ${inv.amount}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-slate-400 text-[11px]">{inv.paymentMethod}</td>
+                        <td className="py-3.5 px-4 font-mono text-slate-400">{new Date(inv.createdAt).toLocaleDateString()}</td>
+                        <td className="py-3.5 px-4">
+                          <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-0.5 rounded-md text-[10px] font-bold">
+                            ✓ PAID
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 4: Full Platform SuperAdmin CRUD */}
         {activeTab === 'platform_users' && (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -741,7 +1064,7 @@ export const PlatformAdminView: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 3: Complete Global Platform System SMTP Configuration */}
+        {/* Tab 5: Complete Global Platform System SMTP Configuration */}
         {activeTab === 'platform_smtp' && (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6 max-w-3xl">
             <div className="border-b border-slate-800 pb-4">
@@ -883,7 +1206,7 @@ export const PlatformAdminView: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 4: Tenant Broadcast Notifications */}
+        {/* Tab 6: Tenant Broadcast Notifications */}
         {activeTab === 'broadcasts' && (
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 max-w-2xl">
             <h3 className="font-extrabold text-white text-base">Dispatch Global Tenant Broadcast Alert</h3>
@@ -954,6 +1277,328 @@ export const PlatformAdminView: React.FC = () => {
 
       {/* --- MODALS --- */}
 
+      {/* Renew Subscription Modal */}
+      {renewingTenant && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-white text-base">Renew Subscription & Process Billing</h3>
+              <button onClick={() => setRenewingTenant(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRenewSubscription} className="space-y-4">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Renew subscription for hospital workspace <strong className="text-white">{renewingTenant.name}</strong>.
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Select Subscription Plan Tier</label>
+                <select
+                  value={renewalForm.planCode}
+                  onChange={(e) => setRenewalForm({ ...renewalForm, planCode: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                >
+                  {plans.map((p) => (
+                    <option key={p.id} value={p.code}>
+                      {p.name} (${p.pricePerMonth} - {p.maxPatientsQuota} Patients)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Billing Cycle Duration</label>
+                <select
+                  value={renewalForm.durationDays}
+                  onChange={(e) => setRenewalForm({ ...renewalForm, durationDays: parseInt(e.target.value) })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                >
+                  <option value={30}>30 Days (Monthly)</option>
+                  <option value={90}>90 Days (Quarterly)</option>
+                  <option value={365}>365 Days (Annual)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Payment Settlement Method</label>
+                <input
+                  type="text"
+                  value={renewalForm.paymentMethod}
+                  onChange={(e) => setRenewalForm({ ...renewalForm, paymentMethod: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRenewingTenant(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-950"
+                >
+                  Confirm Renewal & Send Receipt
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Subscription Plan Tier Modal */}
+      {isCreatePlanModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-white text-base">Create Subscription Plan Tier</h3>
+              <button onClick={() => setIsCreatePlanModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePlan} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Plan Code</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ENTERPRISE_PLUS"
+                    value={planForm.code}
+                    onChange={(e) => setPlanForm({ ...planForm, code: e.target.value.toUpperCase() })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Plan Display Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enterprise Plus Tier"
+                    value={planForm.name}
+                    onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Price / Month ($)</label>
+                  <input
+                    type="number"
+                    required
+                    value={planForm.pricePerMonth}
+                    onChange={(e) => setPlanForm({ ...planForm, pricePerMonth: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Billing Cycle Days</label>
+                  <input
+                    type="number"
+                    required
+                    value={planForm.billingCycleDays}
+                    onChange={(e) => setPlanForm({ ...planForm, billingCycleDays: parseInt(e.target.value) || 30 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max Patient Quota</label>
+                  <input
+                    type="number"
+                    required
+                    value={planForm.maxPatientsQuota}
+                    onChange={(e) => setPlanForm({ ...planForm, maxPatientsQuota: parseInt(e.target.value) || 500 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max Staff Quota</label>
+                  <input
+                    type="number"
+                    required
+                    value={planForm.maxUsersQuota}
+                    onChange={(e) => setPlanForm({ ...planForm, maxUsersQuota: parseInt(e.target.value) || 20 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Features (Comma Separated)</label>
+                <input
+                  type="text"
+                  value={planForm.features}
+                  onChange={(e) => setPlanForm({ ...planForm, features: e.target.value })}
+                  placeholder="EMR, Appointments, Billing, Pharmacy"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatePlanModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-950"
+                >
+                  Save Subscription Plan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Subscription Plan Tier Modal */}
+      {editingPlan && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-white text-base">Edit Subscription Plan Tier</h3>
+              <button onClick={() => setEditingPlan(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditPlan} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Plan Display Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editingPlan.name}
+                  onChange={(e) => setEditingPlan({ ...editingPlan, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Price / Month ($)</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingPlan.pricePerMonth}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, pricePerMonth: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Billing Cycle Days</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingPlan.billingCycleDays}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, billingCycleDays: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max Patient Quota</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingPlan.maxPatientsQuota}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, maxPatientsQuota: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max Staff Quota</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingPlan.maxUsersQuota}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, maxUsersQuota: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Features (Comma Separated)</label>
+                <input
+                  type="text"
+                  value={editingPlan.features}
+                  onChange={(e) => setEditingPlan({ ...editingPlan, features: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPlan(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl"
+                >
+                  Save Plan Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Subscription Plan Tier Modal */}
+      {deletingPlan && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-rose-400 text-base">Delete Subscription Plan Tier</h3>
+              <button onClick={() => setDeletingPlan(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to delete Subscription Plan Tier <strong className="text-white">{deletingPlan.name}</strong> ({deletingPlan.code})?
+            </p>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingPlan(null)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePlan}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-rose-950"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Subscriber Tenant Workspace Modal */}
       {editingTenant && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
@@ -1005,26 +1650,38 @@ export const PlatformAdminView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Subscription Plan</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Subscription Plan Tier</label>
                   <select
                     value={editingTenant.plan}
                     onChange={(e) => setEditingTenant({ ...editingTenant, plan: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                   >
-                    <option value="STARTER">Starter Tier</option>
-                    <option value="PROFESSIONAL">Professional Tier</option>
-                    <option value="ENTERPRISE">Enterprise Tier</option>
+                    {plans.map((p) => (
+                      <option key={p.id} value={p.code}>
+                        {p.name} ({p.code})
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max User Quota</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max Patient Quota</label>
                   <input
                     type="number"
-                    value={editingTenant.maxUsers}
-                    onChange={(e) => setEditingTenant({ ...editingTenant, maxUsers: parseInt(e.target.value) || 10 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    value={editingTenant.maxPatientsQuota}
+                    onChange={(e) => setEditingTenant({ ...editingTenant, maxPatientsQuota: parseInt(e.target.value) || 500 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Max Staff Quota</label>
+                <input
+                  type="number"
+                  value={editingTenant.maxUsers}
+                  onChange={(e) => setEditingTenant({ ...editingTenant, maxUsers: parseInt(e.target.value) || 10 })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
               </div>
 
               <div>
@@ -1033,16 +1690,6 @@ export const PlatformAdminView: React.FC = () => {
                   type="email"
                   value={editingTenant.contactEmail || ''}
                   onChange={(e) => setEditingTenant({ ...editingTenant, contactEmail: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Contact Phone</label>
-                <input
-                  type="text"
-                  value={editingTenant.contactPhone || ''}
-                  onChange={(e) => setEditingTenant({ ...editingTenant, contactPhone: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                 />
               </div>
@@ -1361,19 +2008,21 @@ export const PlatformAdminView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Subscription Plan</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Subscription Plan Tier</label>
                   <select
                     value={createTenantForm.plan}
                     onChange={(e) => setCreateTenantForm({ ...createTenantForm, plan: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                   >
-                    <option value="STARTER">Starter Tier</option>
-                    <option value="PROFESSIONAL">Professional Tier</option>
-                    <option value="ENTERPRISE">Enterprise Tier</option>
+                    {plans.map((p) => (
+                      <option key={p.id} value={p.code}>
+                        {p.name} ({p.code})
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max User Quota</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max Staff Quota</label>
                   <input
                     type="number"
                     value={createTenantForm.maxUsers}
@@ -1384,11 +2033,12 @@ export const PlatformAdminView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Contact Email</label>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Contact Email (Dispatches Welcome Mail)</label>
                 <input
                   type="email"
                   value={createTenantForm.contactEmail}
                   onChange={(e) => setCreateTenantForm({ ...createTenantForm, contactEmail: e.target.value })}
+                  placeholder="admin@stnicholas.com"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                 />
               </div>
@@ -1405,7 +2055,7 @@ export const PlatformAdminView: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-950"
                 >
-                  Provision Workspace
+                  Provision Workspace & Send Email
                 </button>
               </div>
             </form>

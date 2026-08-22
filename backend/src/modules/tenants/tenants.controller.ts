@@ -11,6 +11,59 @@ import { TenantStatus, TenantPlan } from './entities/tenant.entity';
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 
+  // --- Subscription Plan Tier Endpoints ---
+  @Get('plans')
+  async getAllPlans() {
+    return this.tenantsService.findAllPlans();
+  }
+
+  @Post('plans')
+  @Roles(UserRole.ADMIN)
+  async createPlan(@Body() body: any) {
+    return this.tenantsService.createPlan(body);
+  }
+
+  @Put('plans/:id')
+  @Roles(UserRole.ADMIN)
+  async updatePlan(@Param('id') id: string, @Body() body: any) {
+    return this.tenantsService.updatePlan(id, body);
+  }
+
+  @Delete('plans/:id')
+  @Roles(UserRole.ADMIN)
+  async deletePlan(@Param('id') id: string) {
+    await this.tenantsService.deletePlan(id);
+    return { success: true };
+  }
+
+  // --- Subscription Invoices & Renewal Endpoints ---
+  @Get('invoices/all')
+  @Roles(UserRole.ADMIN)
+  async getAllInvoices() {
+    return this.tenantsService.getAllSubscriptionInvoices();
+  }
+
+  @Get(':id/invoices')
+  @Roles(UserRole.ADMIN)
+  async getTenantInvoices(@Param('id') id: string) {
+    return this.tenantsService.getTenantInvoices(id);
+  }
+
+  @Post(':id/renew')
+  @Roles(UserRole.ADMIN)
+  async renewTenantSubscription(
+    @Param('id') id: string,
+    @Body() body: { planCode: string; durationDays?: number; paymentMethod?: string },
+  ) {
+    return this.tenantsService.renewTenantSubscription({
+      tenantId: id,
+      planCode: body.planCode,
+      durationDays: body.durationDays,
+      paymentMethod: body.paymentMethod,
+    });
+  }
+
+  // --- Tenant Endpoints ---
   @Get()
   async getAllTenants() {
     return this.tenantsService.findAll();
@@ -35,6 +88,7 @@ export class TenantsController {
       currency?: string;
       plan?: TenantPlan;
       maxUsers?: number;
+      maxPatientsQuota?: number;
       contactEmail?: string;
       contactPhone?: string;
       smtpHost?: string;

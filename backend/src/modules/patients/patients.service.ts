@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Triage } from './entities/triage.entity';
+import { TenantsService } from '../tenants/tenants.service';
 import { ConcurrencyConflictException } from '../../common/filters/concurrency-exception.filter';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class PatientsService {
     private patientsRepository: Repository<Patient>,
     @InjectRepository(Triage)
     private triageRepository: Repository<Triage>,
+    private tenantsService: TenantsService,
   ) {}
 
   private async generateMrn(): Promise<string> {
@@ -22,6 +24,25 @@ export class PatientsService {
   }
 
   async create(data: Partial<Patient>): Promise<Patient> {
+    // 🛡️ Subscription Patient Quota Enforcement
+    if (data.tenantId) {
+      try {
+        const tenant = await this.tenantsService.findOne(data.tenantId);
+        if (tenant) {
+          const currentCount = await this.patientsRepository.count({ where: { tenantId: data.tenantId } });
+          const maxLimit = tenant.maxPatientsQuota || 500;
+          if (currentCount >= maxLimit) {
+            throw new ForbiddenException(
+              `Subscriber Patient Quota Limit Exceeded: Workspace '${tenant.name}' has reached its maximum patient limit of ${maxLimit} patients under the ${tenant.plan} Subscription Plan Tier. Please upgrade your Subscription Plan Tier to onboard additional patients.`,
+            );
+          }
+        }
+      } catch (err: any) {
+        if (err instanceof ForbiddenException) throw err;
+        // ignore tenant lookup fallback
+      }
+    }
+
     if (!data.mrn) {
       data.mrn = await this.generateMrn();
     }
@@ -104,7 +125,7 @@ export class PatientsService {
         if (!item.fullName) continue;
         await this.create(item);
         imported++;
-      } catch (err) {
+      } catch (err: any) {
         errors.push({ row: i + 1, error: err.message });
       }
     }

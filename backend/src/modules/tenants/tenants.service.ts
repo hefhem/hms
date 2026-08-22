@@ -1,17 +1,106 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { Tenant, TenantStatus, TenantPlan } from './entities/tenant.entity';
+import { SubscriptionPlan } from './entities/subscription-plan.entity';
+import { TenantSubscriptionInvoice, SubscriptionInvoiceStatus } from './entities/tenant-subscription-invoice.entity';
+import { User } from '../users/entities/user.entity';
+import { UserRole } from '../../common/enums/role.enum';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
-export class TenantsService {
+export class TenantsService implements OnModuleInit {
+  private readonly logger = new Logger(TenantsService.name);
+
   constructor(
     @InjectRepository(Tenant)
     private tenantRepository: Repository<Tenant>,
+    @InjectRepository(SubscriptionPlan)
+    private planRepository: Repository<SubscriptionPlan>,
+    @InjectRepository(TenantSubscriptionInvoice)
+    private invoiceRepository: Repository<TenantSubscriptionInvoice>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private notificationService: NotificationService,
   ) {}
 
+  async onModuleInit() {
+    await this.seedDefaultPlans();
+  }
+
+  // --- Seed Default Subscription Plan Tiers ---
+  async seedDefaultPlans() {
+    const count = await this.planRepository.count();
+    if (count === 0) {
+      const defaultPlans = [
+        {
+          code: 'STARTER',
+          name: 'Starter Tier Plan',
+          pricePerMonth: 99.0,
+          billingCycleDays: 30,
+          maxPatientsQuota: 200,
+          maxUsersQuota: 10,
+          features: ['EMR Clinical Notes', 'Appointments Scheduling', 'Basic Billing & Receipts'],
+          isActive: true,
+        },
+        {
+          code: 'PROFESSIONAL',
+          name: 'Professional Tier Plan',
+          pricePerMonth: 299.0,
+          billingCycleDays: 30,
+          maxPatientsQuota: 2000,
+          maxUsersQuota: 50,
+          features: ['EMR Clinical Notes', 'Appointments', 'Billing', 'Pharmacy & E-Prescribing', 'Laboratory Diagnostics'],
+          isActive: true,
+        },
+        {
+          code: 'ENTERPRISE',
+          name: 'Enterprise Care Tier Plan',
+          pricePerMonth: 799.0,
+          billingCycleDays: 30,
+          maxPatientsQuota: 10000,
+          maxUsersQuota: 500,
+          features: ['Full EMR Suite', 'Pharmacy', 'Lab', 'Radiology PACS', 'IPD Ward & Bed Allocation', 'HMO Insurance', 'MFA Security'],
+          isActive: true,
+        },
+      ];
+
+      for (const p of defaultPlans) {
+        const plan = this.planRepository.create(p);
+        await this.planRepository.save(plan);
+      }
+      this.logger.log('Seeded 3 baseline Subscription Plan Tiers (STARTER, PROFESSIONAL, ENTERPRISE)');
+    }
+  }
+
+  // --- Subscription Plan Tier CRUD ---
+  async findAllPlans(): Promise<SubscriptionPlan[]> {
+    return await this.planRepository.find({ order: { pricePerMonth: 'ASC' } });
+  }
+
+  async createPlan(data: Partial<SubscriptionPlan>): Promise<SubscriptionPlan> {
+    const existing = await this.planRepository.findOne({ where: { code: data.code?.toUpperCase() } });
+    if (existing) throw new ConflictException(`Subscription Plan code '${data.code}' already exists`);
+    const plan = this.planRepository.create({
+      ...data,
+      code: data.code?.toUpperCase(),
+    });
+    return await this.planRepository.save(plan);
+  }
+
+  async updatePlan(id: string, data: Partial<SubscriptionPlan>): Promise<SubscriptionPlan> {
+    const plan = await this.planRepository.findOne({ where: { id } });
+    if (!plan) throw new NotFoundException('Subscription Plan not found');
+    Object.assign(plan, data);
+    return await this.planRepository.save(plan);
+  }
+
+  async deletePlan(id: string): Promise<void> {
+    await this.planRepository.delete(id);
+  }
+
+  // --- Tenants Management ---
   async findAll(): Promise<Tenant[]> {
     return await this.tenantRepository.find({ order: { createdAt: 'DESC' } });
   }
@@ -34,6 +123,7 @@ export class TenantsService {
     currency?: string;
     plan?: TenantPlan;
     maxUsers?: number;
+    maxPatientsQuota?: number;
     contactEmail?: string;
     contactPhone?: string;
     smtpHost?: string;
@@ -50,21 +140,95 @@ export class TenantsService {
       throw new ConflictException('Tenant with this name or subdomain already exists');
     }
 
+    // Lookup Subscription Plan details to set quotas
+    const planCode = data.plan || TenantPlan.PROFESSIONAL;
+    const plan = await this.planRepository.findOne({ where: { code: planCode } });
+
+    const startDate = new Date();
+    const billingDays = plan ? plan.billingCycleDays : 30;
+    const endDate = new Date(startDate.getTime() + billingDays * 24 * 60 * 60 * 1000);
+
     const tenant = this.tenantRepository.create({
       ...data,
       subdomain: data.subdomain.toLowerCase(),
       currency: data.currency || 'USD',
-      plan: data.plan || TenantPlan.PROFESSIONAL,
+      plan: planCode,
       status: TenantStatus.ACTIVE,
       isLocked: false,
       isMaintenanceMode: false,
+      maxUsers: data.maxUsers || (plan ? plan.maxUsersQuota : 50),
+      maxPatientsQuota: data.maxPatientsQuota || (plan ? plan.maxPatientsQuota : 2000),
+      subscriptionStartDate: startDate,
+      subscriptionEndDate: endDate,
+      subscriptionStatus: 'ACTIVE',
       smtpHost: data.smtpHost || 'localhost',
       smtpPort: data.smtpPort || 1025,
       senderEmail: data.senderEmail || `notifications@${data.subdomain}.clinic.com`,
       senderName: data.senderName || `${data.name} Care Team`,
     });
 
-    return await this.tenantRepository.save(tenant);
+    const savedTenant = await this.tenantRepository.save(tenant);
+
+    // Auto-create Initial Hospital Admin User Credentials
+    const defaultEmail = data.contactEmail || `admin@${savedTenant.subdomain}.com`;
+    const tempPassword = 'Admin@123456';
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    const adminUser = this.userRepository.create({
+      fullName: `${savedTenant.name} Administrator`,
+      email: defaultEmail,
+      password: hashedPassword,
+      role: UserRole.ADMIN,
+      tenantId: savedTenant.id,
+      isActive: true,
+    });
+    await this.userRepository.save(adminUser);
+
+    // Auto-generate Initial Subscription Billing Invoice
+    const invCount = await this.invoiceRepository.count();
+    const invoiceNum = `SUB-INV-2026-${(invCount + 1).toString().padStart(4, '0')}`;
+    const invoice = this.invoiceRepository.create({
+      tenantId: savedTenant.id,
+      invoiceNumber: invoiceNum,
+      planCode,
+      amount: plan ? plan.pricePerMonth : 299.0,
+      currency: savedTenant.currency,
+      billingCycleDays: billingDays,
+      dueDate: endDate,
+      paidAt: new Date(),
+      status: SubscriptionInvoiceStatus.PAID,
+      paymentMethod: 'SUPERADMIN_INITIAL_PROVISION',
+    });
+    await this.invoiceRepository.save(invoice);
+
+    // Dispatch Automated Welcome Email via Outbound SMTP Relay
+    if (savedTenant.contactEmail) {
+      const welcomeSubject = `🎉 Welcome to ApexCare HMS - Subscriber Workspace Provisioned: ${savedTenant.name}`;
+      const welcomeHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 16px; border: 1px solid #334155;">
+          <h2 style="color: #38bdf8; margin-top: 0;">Subscriber Hospital Workspace Provisioned</h2>
+          <p>Dear <strong>${savedTenant.name} Administrator</strong>,</p>
+          <p>Your enterprise hospital management workspace has been successfully provisioned on the ApexCare Multi-Tenant SaaS Platform.</p>
+          
+          <div style="background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155; font-family: monospace; color: #38bdf8; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Hospital Workspace:</strong> ${savedTenant.name}</p>
+            <p style="margin: 4px 0;"><strong>Portal URL:</strong> http://localhost:5178 (${savedTenant.subdomain}.clinic.com)</p>
+            <p style="margin: 4px 0;"><strong>Admin Login Email:</strong> ${defaultEmail}</p>
+            <p style="margin: 4px 0;"><strong>Temporary Password:</strong> ${tempPassword}</p>
+            <p style="margin: 4px 0;"><strong>Subscription Tier:</strong> ${planCode} (${savedTenant.currency})</p>
+            <p style="margin: 4px 0;"><strong>Patient Onboarding Quota:</strong> ${savedTenant.maxPatientsQuota} Patients</p>
+            <p style="margin: 4px 0;"><strong>Subscription Expiry:</strong> ${endDate.toLocaleDateString()}</p>
+          </div>
+
+          <p style="font-size: 13px; color: #cbd5e1;">Please login to your portal and update your password immediately upon first access.</p>
+          <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0;" />
+          <p style="font-size: 11px; color: #94a3b8;">ApexCare Enterprise SaaS Platform Operations &copy; 2026</p>
+        </div>
+      `;
+      await this.notificationService.sendEmail(savedTenant.contactEmail, welcomeSubject, '', welcomeHtml);
+    }
+
+    return savedTenant;
   }
 
   async update(id: string, data: Partial<Tenant>): Promise<Tenant> {
@@ -114,6 +278,84 @@ export class TenantsService {
     const tenant = await this.findOne(id);
     tenant.status = status;
     return await this.tenantRepository.save(tenant);
+  }
+
+  // --- Subscription Billing & Renewals ---
+  async getTenantInvoices(tenantId: string): Promise<TenantSubscriptionInvoice[]> {
+    return await this.invoiceRepository.find({ where: { tenantId }, order: { createdAt: 'DESC' } });
+  }
+
+  async getAllSubscriptionInvoices(): Promise<TenantSubscriptionInvoice[]> {
+    return await this.invoiceRepository.find({ order: { createdAt: 'DESC' } });
+  }
+
+  async renewTenantSubscription(data: {
+    tenantId: string;
+    planCode: string;
+    durationDays?: number;
+    paymentMethod?: string;
+  }): Promise<{ tenant: Tenant; invoice: TenantSubscriptionInvoice }> {
+    const tenant = await this.findOne(data.tenantId);
+    const plan = await this.planRepository.findOne({ where: { code: data.planCode } });
+
+    const billingDays = data.durationDays || (plan ? plan.billingCycleDays : 30);
+    const currentEnd = tenant.subscriptionEndDate && tenant.subscriptionEndDate > new Date()
+      ? new Date(tenant.subscriptionEndDate)
+      : new Date();
+
+    const newEnd = new Date(currentEnd.getTime() + billingDays * 24 * 60 * 60 * 1000);
+
+    tenant.plan = data.planCode as any;
+    tenant.subscriptionEndDate = newEnd;
+    tenant.subscriptionStatus = 'ACTIVE';
+    tenant.isLocked = false; // Unlock upon successful renewal
+    if (plan) {
+      tenant.maxPatientsQuota = plan.maxPatientsQuota;
+      tenant.maxUsers = plan.maxUsersQuota;
+    }
+    const updatedTenant = await this.tenantRepository.save(tenant);
+
+    const invCount = await this.invoiceRepository.count();
+    const invoiceNum = `SUB-INV-2026-${(invCount + 1).toString().padStart(4, '0')}`;
+    const invoice = this.invoiceRepository.create({
+      tenantId: tenant.id,
+      invoiceNumber: invoiceNum,
+      planCode: data.planCode,
+      amount: plan ? plan.pricePerMonth : 299.0,
+      currency: tenant.currency,
+      billingCycleDays: billingDays,
+      dueDate: newEnd,
+      paidAt: new Date(),
+      status: SubscriptionInvoiceStatus.PAID,
+      paymentMethod: data.paymentMethod || 'SUPERADMIN_MANUAL_RENEWAL',
+    });
+    const savedInvoice = await this.invoiceRepository.save(invoice);
+
+    // Dispatch Digital Renewal Receipt Email via Outbound SMTP Relay
+    if (tenant.contactEmail) {
+      const receiptSubject = `💳 Subscription Renewed: ${tenant.name} (${data.planCode} Plan)`;
+      const receiptHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 16px; border: 1px solid #334155;">
+          <h2 style="color: #38bdf8; margin-top: 0;">Subscription Renewal Receipt</h2>
+          <p>Dear <strong>${tenant.name} Administrator</strong>,</p>
+          <p>Your subscription for hospital workspace <strong>${tenant.name}</strong> has been successfully renewed.</p>
+          
+          <div style="background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155; font-family: monospace; color: #38bdf8; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Invoice Number:</strong> ${invoiceNum}</p>
+            <p style="margin: 4px 0;"><strong>Subscription Tier:</strong> ${data.planCode}</p>
+            <p style="margin: 4px 0;"><strong>Amount Paid:</strong> ${tenant.currency} ${invoice.amount}</p>
+            <p style="margin: 4px 0;"><strong>Billing Extension:</strong> ${billingDays} Days</p>
+            <p style="margin: 4px 0;"><strong>New Expiry Date:</strong> ${newEnd.toLocaleDateString()}</p>
+            <p style="margin: 4px 0;"><strong>Patient Onboarding Quota:</strong> ${tenant.maxPatientsQuota} Patients</p>
+          </div>
+
+          <p style="font-size: 11px; color: #94a3b8;">ApexCare Enterprise SaaS Platform Operations &copy; 2026</p>
+        </div>
+      `;
+      await this.notificationService.sendEmail(tenant.contactEmail, receiptSubject, '', receiptHtml);
+    }
+
+    return { tenant: updatedTenant, invoice: savedInvoice };
   }
 
   async sendTestSmtp(id: string, recipientEmail: string): Promise<{ success: boolean; message: string }> {
