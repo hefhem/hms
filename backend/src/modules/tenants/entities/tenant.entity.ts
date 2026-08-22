@@ -53,6 +53,25 @@ export class Tenant {
   @Column({ nullable: true })
   contactPhone: string;
 
+  // Per-Tenant SMTP Mail Gateway Configurations
+  @Column({ default: 'localhost' })
+  smtpHost: string;
+
+  @Column({ default: 1025 })
+  smtpPort: number;
+
+  @Column({ nullable: true })
+  smtpUser: string;
+
+  @Column({ nullable: true })
+  smtpPassword: string;
+
+  @Column({ default: 'notifications@clinic.com' })
+  senderEmail: string;
+
+  @Column({ default: 'Hospital Management System' })
+  senderName: string;
+
   @VersionColumn()
   version: number;
 

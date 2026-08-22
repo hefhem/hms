@@ -37,6 +37,12 @@ export class TenantsController {
       maxUsers?: number;
       contactEmail?: string;
       contactPhone?: string;
+      smtpHost?: string;
+      smtpPort?: number;
+      smtpUser?: string;
+      smtpPassword?: string;
+      senderEmail?: string;
+      senderName?: string;
     },
   ) {
     return this.tenantsService.create(body);
@@ -46,6 +52,22 @@ export class TenantsController {
   @Roles(UserRole.ADMIN)
   async updateTenant(@Param('id') id: string, @Body() body: any) {
     return this.tenantsService.update(id, body);
+  }
+
+  @Put(':id/smtp')
+  @Roles(UserRole.ADMIN)
+  async updateSmtpConfig(
+    @Param('id') id: string,
+    @Body() body: {
+      smtpHost: string;
+      smtpPort: number;
+      smtpUser?: string;
+      smtpPassword?: string;
+      senderEmail: string;
+      senderName: string;
+    },
+  ) {
+    return this.tenantsService.updateSmtpConfig(id, body);
   }
 
   @Put(':id/status')

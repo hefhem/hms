@@ -34,6 +34,12 @@ export class TenantsService {
     maxUsers?: number;
     contactEmail?: string;
     contactPhone?: string;
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpUser?: string;
+    smtpPassword?: string;
+    senderEmail?: string;
+    senderName?: string;
   }): Promise<Tenant> {
     const existing = await this.tenantRepository.findOne({
       where: [{ name: data.name }, { subdomain: data.subdomain.toLowerCase() }],
@@ -48,6 +54,10 @@ export class TenantsService {
       currency: data.currency || 'USD',
       plan: data.plan || TenantPlan.PROFESSIONAL,
       status: TenantStatus.ACTIVE,
+      smtpHost: data.smtpHost || 'localhost',
+      smtpPort: data.smtpPort || 1025,
+      senderEmail: data.senderEmail || `${data.subdomain}@clinic.com`,
+      senderName: data.senderName || `${data.name} Care Team`,
     });
 
     return await this.tenantRepository.save(tenant);
@@ -56,6 +66,24 @@ export class TenantsService {
   async update(id: string, data: Partial<Tenant>): Promise<Tenant> {
     const tenant = await this.findOne(id);
     Object.assign(tenant, data);
+    return await this.tenantRepository.save(tenant);
+  }
+
+  async updateSmtpConfig(id: string, smtpConfig: {
+    smtpHost: string;
+    smtpPort: number;
+    smtpUser?: string;
+    smtpPassword?: string;
+    senderEmail: string;
+    senderName: string;
+  }): Promise<Tenant> {
+    const tenant = await this.findOne(id);
+    tenant.smtpHost = smtpConfig.smtpHost;
+    tenant.smtpPort = smtpConfig.smtpPort;
+    tenant.smtpUser = smtpConfig.smtpUser;
+    if (smtpConfig.smtpPassword) tenant.smtpPassword = smtpConfig.smtpPassword;
+    tenant.senderEmail = smtpConfig.senderEmail;
+    tenant.senderName = smtpConfig.senderName;
     return await this.tenantRepository.save(tenant);
   }
 
