@@ -46,6 +46,10 @@ export class SeedService implements OnApplicationBootstrap {
 
   private async seedTenants() {
     this.logger.log('Seeding baseline Multi-Tenant Workspaces...');
+    const now = new Date();
+    const activeExpiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const overdueExpiry = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+
     const demoTenants = [
       {
         name: 'ApexCare Main Medical Center',
@@ -53,6 +57,10 @@ export class SeedService implements OnApplicationBootstrap {
         currency: 'USD',
         plan: TenantPlan.ENTERPRISE,
         maxUsers: 250,
+        maxPatientsQuota: 10000,
+        subscriptionStartDate: new Date('2026-01-01'),
+        subscriptionEndDate: activeExpiry,
+        subscriptionStatus: 'ACTIVE',
         contactEmail: 'admin@apexcare.clinic',
         contactPhone: '+1 (555) 019-2831',
         status: TenantStatus.ACTIVE,
@@ -63,6 +71,10 @@ export class SeedService implements OnApplicationBootstrap {
         currency: 'NGN',
         plan: TenantPlan.PROFESSIONAL,
         maxUsers: 100,
+        maxPatientsQuota: 2000,
+        subscriptionStartDate: new Date('2026-01-01'),
+        subscriptionEndDate: overdueExpiry,
+        subscriptionStatus: 'OVERDUE',
         contactEmail: 'info@stnicholas.com',
         contactPhone: '+234 1 271 0000',
         status: TenantStatus.ACTIVE,
@@ -70,9 +82,14 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const t of demoTenants) {
-      const existing = await this.tenantRepository.findOne({ where: { subdomain: t.subdomain } });
+      let existing = await this.tenantRepository.findOne({ where: { subdomain: t.subdomain } });
       if (!existing) {
         await this.tenantRepository.save(this.tenantRepository.create(t));
+      } else {
+        existing.subscriptionStartDate = t.subscriptionStartDate;
+        existing.subscriptionEndDate = t.subscriptionEndDate;
+        existing.subscriptionStatus = t.subscriptionStatus;
+        await this.tenantRepository.save(existing);
       }
     }
   }

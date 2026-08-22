@@ -760,13 +760,41 @@ export const PlatformAdminView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs font-mono bg-slate-950/40 px-3 py-2 rounded-xl border border-slate-800/60">
-                  <span className="text-slate-400 flex items-center gap-1 text-[11px]">
-                    <Clock className="w-3.5 h-3.5 text-cyan-400" /> Subscription Expires:
-                  </span>
-                  <span className="text-amber-400 font-bold">
-                    {t.subscriptionEndDate ? new Date(t.subscriptionEndDate).toLocaleDateString() : 'N/A'}
-                  </span>
+                <div className="space-y-2 font-mono text-xs bg-slate-950/40 p-3 rounded-2xl border border-slate-800/60">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-cyan-400" /> Start Date:
+                    </span>
+                    <span className="text-slate-200 font-semibold">
+                      {t.subscriptionStartDate ? new Date(t.subscriptionStartDate).toLocaleDateString() : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" /> Billing Due Date:
+                    </span>
+                    <span className="text-slate-200 font-semibold">
+                      {t.subscriptionEndDate ? new Date(t.subscriptionEndDate).toLocaleDateString() : 'N/A'}
+                    </span>
+                  </div>
+
+                  {/* Payment & Expiry Tracking Badge */}
+                  <div className="pt-1 flex items-center justify-between border-t border-slate-800/60">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">Payment Status</span>
+                    {t.subscriptionStatus === 'OVERDUE' ? (
+                      <span className="bg-rose-950 text-rose-400 border border-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 animate-pulse">
+                        🚨 OVERDUE / UNPAID ({t.daysDifference} Days Overdue)
+                      </span>
+                    ) : t.subscriptionStatus === 'DUE' ? (
+                      <span className="bg-amber-950 text-amber-400 border border-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                        ⚠️ DUE FOR RENEWAL ({t.daysDifference} Days Left)
+                      </span>
+                    ) : (
+                      <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                        ● PAID & ACTIVE ({t.daysDifference} Days Left)
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {t.isLocked && t.lockReason && (

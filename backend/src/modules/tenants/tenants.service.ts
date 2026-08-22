@@ -116,8 +116,51 @@ export class TenantsService implements OnModuleInit {
   }
 
   // --- Tenants Management ---
-  async findAll(): Promise<Tenant[]> {
-    return await this.tenantRepository.find({ order: { createdAt: 'DESC' } });
+  async findAll(): Promise<any[]> {
+    const tenants = await this.tenantRepository.find({ order: { createdAt: 'DESC' } });
+    const now = new Date();
+
+    const result = [];
+    for (const t of tenants) {
+      let startDate = t.subscriptionStartDate;
+      let endDate = t.subscriptionEndDate;
+
+      if (!startDate) {
+        startDate = t.createdAt || new Date();
+        t.subscriptionStartDate = startDate;
+      }
+      if (!endDate) {
+        endDate = new Date(new Date(startDate).getTime() + 30 * 24 * 60 * 60 * 1000);
+        t.subscriptionEndDate = endDate;
+      }
+
+      let subStatus = 'ACTIVE';
+      let daysDiff = 0;
+
+      const endMs = new Date(endDate).getTime();
+      const nowMs = now.getTime();
+
+      if (nowMs > endMs) {
+        subStatus = 'OVERDUE';
+        daysDiff = Math.ceil((nowMs - endMs) / (1000 * 60 * 60 * 24));
+      } else {
+        daysDiff = Math.ceil((endMs - nowMs) / (1000 * 60 * 60 * 24));
+        if (daysDiff <= 5) {
+          subStatus = 'DUE';
+        }
+      }
+
+      t.subscriptionStatus = subStatus;
+      await this.tenantRepository.save(t);
+
+      result.push({
+        ...t,
+        subscriptionStatus: subStatus,
+        daysDifference: daysDiff,
+      });
+    }
+
+    return result;
   }
 
   async findOne(id: string): Promise<Tenant> {
