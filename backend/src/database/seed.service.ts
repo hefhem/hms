@@ -56,7 +56,7 @@ export class SeedService implements OnApplicationBootstrap {
         subdomain: 'apexcare',
         currency: 'USD',
         plan: TenantPlan.ENTERPRISE,
-        maxUsers: 250,
+        maxUsers: 500,
         maxPatientsQuota: 10000,
         subscriptionStartDate: new Date('2026-01-01'),
         subscriptionEndDate: activeExpiry,
@@ -70,7 +70,7 @@ export class SeedService implements OnApplicationBootstrap {
         subdomain: 'stnicholas',
         currency: 'NGN',
         plan: TenantPlan.PROFESSIONAL,
-        maxUsers: 100,
+        maxUsers: 50,
         maxPatientsQuota: 2000,
         subscriptionStartDate: new Date('2026-01-01'),
         subscriptionEndDate: overdueExpiry,
@@ -86,6 +86,9 @@ export class SeedService implements OnApplicationBootstrap {
       if (!existing) {
         await this.tenantRepository.save(this.tenantRepository.create(t));
       } else {
+        existing.plan = t.plan;
+        existing.maxUsers = t.maxUsers;
+        existing.maxPatientsQuota = t.maxPatientsQuota;
         existing.subscriptionStartDate = t.subscriptionStartDate;
         existing.subscriptionEndDate = t.subscriptionEndDate;
         existing.subscriptionStatus = t.subscriptionStatus;

@@ -748,16 +748,24 @@ export const PlatformAdminView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 font-mono">
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Patient Onboarding Quota</span>
-                    <span className="text-cyan-400 font-semibold">{t.maxPatientsQuota || 2000} Max Patients</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">User Staff Quota</span>
-                    <span className="text-slate-300 font-semibold">{t.maxUsers} Staff Accounts</span>
-                  </div>
-                </div>
+                {(() => {
+                  const planTier = plans.find((p) => p.code === t.plan);
+                  const maxPat = planTier ? planTier.maxPatientsQuota : (t.maxPatientsQuota || 2000);
+                  const maxUsers = planTier ? planTier.maxUsersQuota : (t.maxUsers || 50);
+
+                  return (
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 font-mono">
+                      <div>
+                        <span className="text-slate-500 block text-[10px]">Patient Onboarding Quota ({t.plan})</span>
+                        <span className="text-cyan-400 font-semibold">{maxPat.toLocaleString()} Max Patients</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[10px]">User Staff Quota ({t.plan})</span>
+                        <span className="text-slate-300 font-semibold">{maxUsers.toLocaleString()} Staff Accounts</span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="space-y-2 font-mono text-xs bg-slate-950/40 p-3 rounded-2xl border border-slate-800/60">
                   <div className="flex items-center justify-between text-[11px]">

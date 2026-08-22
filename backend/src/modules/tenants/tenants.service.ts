@@ -118,10 +118,17 @@ export class TenantsService implements OnModuleInit {
   // --- Tenants Management ---
   async findAll(): Promise<any[]> {
     const tenants = await this.tenantRepository.find({ order: { createdAt: 'DESC' } });
+    const plans = await this.planRepository.find();
     const now = new Date();
 
     const result = [];
     for (const t of tenants) {
+      const plan = plans.find((p) => p.code === t.plan);
+      if (plan) {
+        t.maxPatientsQuota = plan.maxPatientsQuota;
+        t.maxUsers = plan.maxUsersQuota;
+      }
+
       let startDate = t.subscriptionStartDate;
       let endDate = t.subscriptionEndDate;
 
@@ -130,7 +137,7 @@ export class TenantsService implements OnModuleInit {
         t.subscriptionStartDate = startDate;
       }
       if (!endDate) {
-        endDate = new Date(new Date(startDate).getTime() + 30 * 24 * 60 * 60 * 1000);
+        endDate = new Date(new Date(startDate).getTime() + (plan ? plan.billingCycleDays : 30) * 24 * 60 * 60 * 1000);
         t.subscriptionEndDate = endDate;
       }
 
