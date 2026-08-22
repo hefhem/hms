@@ -2,12 +2,14 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant, TenantStatus, TenantPlan } from './entities/tenant.entity';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class TenantsService {
   constructor(
     @InjectRepository(Tenant)
     private tenantRepository: Repository<Tenant>,
+    private notificationService: NotificationService,
   ) {}
 
   async findAll(): Promise<Tenant[]> {
@@ -54,9 +56,11 @@ export class TenantsService {
       currency: data.currency || 'USD',
       plan: data.plan || TenantPlan.PROFESSIONAL,
       status: TenantStatus.ACTIVE,
+      isLocked: false,
+      isMaintenanceMode: false,
       smtpHost: data.smtpHost || 'localhost',
       smtpPort: data.smtpPort || 1025,
-      senderEmail: data.senderEmail || `${data.subdomain}@clinic.com`,
+      senderEmail: data.senderEmail || `notifications@${data.subdomain}.clinic.com`,
       senderName: data.senderName || `${data.name} Care Team`,
     });
 
@@ -76,6 +80,8 @@ export class TenantsService {
     smtpPassword?: string;
     senderEmail: string;
     senderName: string;
+    emailHeaderTemplate?: string;
+    emailFooterTemplate?: string;
   }): Promise<Tenant> {
     const tenant = await this.findOne(id);
     tenant.smtpHost = smtpConfig.smtpHost;
@@ -84,6 +90,23 @@ export class TenantsService {
     if (smtpConfig.smtpPassword) tenant.smtpPassword = smtpConfig.smtpPassword;
     tenant.senderEmail = smtpConfig.senderEmail;
     tenant.senderName = smtpConfig.senderName;
+    if (smtpConfig.emailHeaderTemplate !== undefined) tenant.emailHeaderTemplate = smtpConfig.emailHeaderTemplate;
+    if (smtpConfig.emailFooterTemplate !== undefined) tenant.emailFooterTemplate = smtpConfig.emailFooterTemplate;
+    return await this.tenantRepository.save(tenant);
+  }
+
+  async toggleLock(id: string, isLocked: boolean, lockReason?: string): Promise<Tenant> {
+    const tenant = await this.findOne(id);
+    tenant.isLocked = isLocked;
+    tenant.lockReason = isLocked ? (lockReason || 'Tenant account locked due to administrative policy or subscription hold.') : undefined;
+    tenant.status = isLocked ? TenantStatus.LOCKED : TenantStatus.ACTIVE;
+    return await this.tenantRepository.save(tenant);
+  }
+
+  async toggleMaintenance(id: string, isMaintenanceMode: boolean, maintenanceMessage?: string): Promise<Tenant> {
+    const tenant = await this.findOne(id);
+    tenant.isMaintenanceMode = isMaintenanceMode;
+    tenant.maintenanceMessage = isMaintenanceMode ? (maintenanceMessage || 'System scheduled maintenance in progress. Access temporarily paused.') : undefined;
     return await this.tenantRepository.save(tenant);
   }
 
@@ -91,6 +114,20 @@ export class TenantsService {
     const tenant = await this.findOne(id);
     tenant.status = status;
     return await this.tenantRepository.save(tenant);
+  }
+
+  async sendTestSmtp(id: string, recipientEmail: string): Promise<{ success: boolean; message: string }> {
+    const tenant = await this.findOne(id);
+    await this.notificationService.sendWelcomeEmail(
+      recipientEmail,
+      `Staff Member (${tenant.name})`,
+      'ADMIN' as any,
+      'TestPassword123!',
+    );
+    return {
+      success: true,
+      message: `Test email successfully dispatched to ${recipientEmail} via SMTP Server (${tenant.smtpHost}:${tenant.smtpPort})`,
+    };
   }
 
   async delete(id: string): Promise<void> {

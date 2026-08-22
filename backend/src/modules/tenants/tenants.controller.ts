@@ -65,15 +65,41 @@ export class TenantsController {
       smtpPassword?: string;
       senderEmail: string;
       senderName: string;
+      emailHeaderTemplate?: string;
+      emailFooterTemplate?: string;
     },
   ) {
     return this.tenantsService.updateSmtpConfig(id, body);
+  }
+
+  @Put(':id/lock')
+  @Roles(UserRole.ADMIN)
+  async toggleLock(
+    @Param('id') id: string,
+    @Body() body: { isLocked: boolean; lockReason?: string },
+  ) {
+    return this.tenantsService.toggleLock(id, body.isLocked, body.lockReason);
+  }
+
+  @Put(':id/maintenance')
+  @Roles(UserRole.ADMIN)
+  async toggleMaintenance(
+    @Param('id') id: string,
+    @Body() body: { isMaintenanceMode: boolean; maintenanceMessage?: string },
+  ) {
+    return this.tenantsService.toggleMaintenance(id, body.isMaintenanceMode, body.maintenanceMessage);
   }
 
   @Put(':id/status')
   @Roles(UserRole.ADMIN)
   async toggleStatus(@Param('id') id: string, @Body() body: { status: TenantStatus }) {
     return this.tenantsService.toggleStatus(id, body.status);
+  }
+
+  @Post(':id/test-smtp')
+  @Roles(UserRole.ADMIN)
+  async sendTestSmtp(@Param('id') id: string, @Body() body: { recipientEmail: string }) {
+    return this.tenantsService.sendTestSmtp(id, body.recipientEmail);
   }
 
   @Delete(':id')

@@ -19,6 +19,8 @@ import {
   ChevronRight,
   Globe,
   Server,
+  Settings,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -37,6 +39,8 @@ export type TabType =
   | 'masterdata'
   | 'users'
   | 'tenants'
+  | 'platform'
+  | 'tenant-settings'
   | 'audit';
 
 interface SidebarProps {
@@ -66,7 +70,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       id: 'saas',
       title: '🏢 Multi-Tenant SaaS Platform',
       items: [
-        { id: 'tenants', label: 'Tenant Workspaces & SMTP', icon: Globe, roles: ['ADMIN'] },
+        { id: 'platform', label: 'SaaS SuperAdmin Platform', icon: Building2, roles: ['ADMIN'] },
+        { id: 'tenants', label: 'Tenant Workspaces List', icon: Globe, roles: ['ADMIN'] },
       ],
     },
     {
@@ -110,6 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       items: [
         { id: 'masterdata', label: 'Master Data Catalog', icon: Database, roles: ['ADMIN', 'BILLING_CLERK'] },
         { id: 'users', label: 'User Roles & Staff', icon: UserCheck, roles: ['ADMIN'] },
+        { id: 'tenant-settings', label: 'Company SMTP & Settings', icon: Settings, roles: ['ADMIN'] },
         { id: 'audit', label: 'System Audit Logs', icon: ShieldCheck, roles: ['ADMIN'] },
       ],
     },
@@ -184,7 +190,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
           Multi-Tenant Engine
         </span>
-        <span className="text-slate-600">v2.2.0</span>
+        <span className="text-slate-600">v2.3.0</span>
       </div>
     </aside>
   );

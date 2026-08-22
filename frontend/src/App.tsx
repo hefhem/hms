@@ -19,6 +19,8 @@ import { InsuranceView } from './views/InsuranceView';
 import { MasterDataView } from './views/MasterDataView';
 import { UsersManagementView } from './views/UsersManagementView';
 import { TenantManagementView } from './views/TenantManagementView';
+import { PlatformAdminView } from './views/PlatformAdminView';
+import { TenantSettingsView } from './views/TenantSettingsView';
 import { AuditView } from './views/AuditView';
 import { ConcurrencyModal } from './components/common/ConcurrencyModal';
 import { MfaSetupModal } from './components/common/MfaSetupModal';
@@ -74,6 +76,8 @@ const MainContent: React.FC = () => {
           {activeTab === 'masterdata' && <MasterDataView />}
           {activeTab === 'users' && <UsersManagementView />}
           {activeTab === 'tenants' && <TenantManagementView />}
+          {activeTab === 'platform' && <PlatformAdminView />}
+          {activeTab === 'tenant-settings' && <TenantSettingsView />}
           {activeTab === 'audit' && <AuditView />}
         </main>
       </div>

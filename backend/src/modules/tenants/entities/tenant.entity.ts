@@ -16,6 +16,7 @@ export enum TenantPlan {
 export enum TenantStatus {
   ACTIVE = 'ACTIVE',
   SUSPENDED = 'SUSPENDED',
+  LOCKED = 'LOCKED',
 }
 
 @Entity('tenants')
@@ -44,6 +45,18 @@ export class Tenant {
   })
   status: TenantStatus;
 
+  @Column({ default: false })
+  isLocked: boolean;
+
+  @Column({ nullable: true })
+  lockReason: string;
+
+  @Column({ default: false })
+  isMaintenanceMode: boolean;
+
+  @Column({ nullable: true })
+  maintenanceMessage: string;
+
   @Column({ default: 50 })
   maxUsers: number;
 
@@ -53,7 +66,7 @@ export class Tenant {
   @Column({ nullable: true })
   contactPhone: string;
 
-  // Per-Tenant SMTP Mail Gateway Configurations
+  // Per-Tenant Outbound SMTP Configuration
   @Column({ default: 'localhost' })
   smtpHost: string;
 
@@ -71,6 +84,12 @@ export class Tenant {
 
   @Column({ default: 'Hospital Management System' })
   senderName: string;
+
+  @Column({ nullable: true })
+  emailHeaderTemplate: string;
+
+  @Column({ nullable: true })
+  emailFooterTemplate: string;
 
   @VersionColumn()
   version: number;
