@@ -21,6 +21,7 @@ import { RadiologyOrder } from './modules/radiology/entities/radiology-order.ent
 import { Bed } from './modules/ipd/entities/bed.entity';
 import { Admission } from './modules/ipd/entities/admission.entity';
 import { HmoClaim } from './modules/insurance/entities/hmo-claim.entity';
+import { HmoProvider } from './modules/insurance/entities/hmo-provider.entity';
 
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -83,6 +84,7 @@ import { SeedService } from './database/seed.service';
           Bed,
           Admission,
           HmoClaim,
+          HmoProvider,
         ];
 
         if (dbType === 'sqlite') {
@@ -119,6 +121,7 @@ import { SeedService } from './database/seed.service';
       Bed,
       Admission,
       HmoClaim,
+      HmoProvider,
     ]),
 
     NotificationModule,
