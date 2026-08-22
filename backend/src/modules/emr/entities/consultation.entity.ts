@@ -19,6 +19,9 @@ export class Consultation {
   id: string;
 
   @Column({ nullable: true })
+  tenantId: string;
+
+  @Column({ nullable: true })
   appointmentId: string;
 
   @Column()
@@ -37,13 +40,13 @@ export class Consultation {
   chiefComplaint: string;
 
   @Column({ nullable: true })
-  hpi: string; // History of Present Illness
+  hpi: string;
 
   @Column({ nullable: true })
   icdCode: string;
 
   @Column({ nullable: true })
-  diagnosis: string; // ICD-10 description
+  diagnosis: string;
 
   @Column({ nullable: true })
   clinicalNotes: string;

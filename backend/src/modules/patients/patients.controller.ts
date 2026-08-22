@@ -14,8 +14,8 @@ export class PatientsController {
   constructor(private readonly patientsService: PatientsService) {}
 
   @Get()
-  async getAllPatients(@Query('search') search?: string) {
-    return this.patientsService.findAll(search);
+  async getAllPatients(@CurrentUser() user: any, @Query('search') search?: string) {
+    return this.patientsService.findAll(search, user?.tenantId);
   }
 
   @Get(':id')
@@ -25,8 +25,11 @@ export class PatientsController {
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.RECEPTIONIST, UserRole.NURSE)
-  async createPatient(@Body() body: Partial<Patient>) {
-    return this.patientsService.create(body);
+  async createPatient(@CurrentUser() user: any, @Body() body: Partial<Patient>) {
+    return this.patientsService.create({
+      ...body,
+      tenantId: user?.tenantId,
+    });
   }
 
   @Put(':id')
@@ -53,7 +56,8 @@ export class PatientsController {
 
   @Post('bulk-import')
   @Roles(UserRole.ADMIN, UserRole.RECEPTIONIST)
-  async bulkImportPatients(@Body() body: { records: Partial<Patient>[] }) {
-    return this.patientsService.bulkImport(body.records);
+  async bulkImportPatients(@CurrentUser() user: any, @Body() body: { records: Partial<Patient>[] }) {
+    const recordsWithTenant = body.records.map((r) => ({ ...r, tenantId: user?.tenantId }));
+    return this.patientsService.bulkImport(recordsWithTenant);
   }
 }

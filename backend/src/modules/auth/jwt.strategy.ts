@@ -17,13 +17,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; email: string; role: string }) {
+  async validate(payload: { sub: string; tenantId?: string; email: string; role: string }) {
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
       throw new UnauthorizedException('User account no longer exists');
     }
     return {
       id: user.id,
+      tenantId: user.tenantId,
       email: user.email,
       fullName: user.fullName,
       role: user.role,

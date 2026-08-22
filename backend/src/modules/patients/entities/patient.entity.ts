@@ -14,19 +14,22 @@ export class Patient {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true })
+  tenantId: string;
+
   @Column({ unique: true })
-  mrn: string; // Medical Record Number (e.g. MRN-2026-0001)
+  mrn: string;
 
   @Column()
   fullName: string;
 
-  @Column()
-  gender: string; // 'Male' | 'Female' | 'Other'
+  @Column({ nullable: true })
+  gender: string;
 
-  @Column()
-  dateOfBirth: string; // YYYY-MM-DD
+  @Column({ nullable: true })
+  dateOfBirth: string;
 
-  @Column()
+  @Column({ nullable: true })
   phone: string;
 
   @Column({ nullable: true })
@@ -35,8 +38,8 @@ export class Patient {
   @Column({ nullable: true })
   address: string;
 
-  @Column({ default: 'Unknown' })
-  bloodGroup: string; // e.g. A+, O-, etc.
+  @Column({ nullable: true })
+  bloodGroup: string;
 
   @Column({ nullable: true })
   allergies: string;

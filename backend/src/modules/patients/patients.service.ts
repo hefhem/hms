@@ -29,13 +29,19 @@ export class PatientsService {
     return await this.patientsRepository.save(patient);
   }
 
-  async findAll(search?: string): Promise<Patient[]> {
+  async findAll(search?: string, tenantId?: string): Promise<Patient[]> {
     const qb = this.patientsRepository.createQueryBuilder('patient').orderBy('patient.createdAt', 'DESC');
+
+    if (tenantId) {
+      qb.andWhere('(patient.tenantId = :tenantId OR patient.tenantId IS NULL)', { tenantId });
+    }
+
     if (search) {
-      qb.where('patient.fullName LIKE :search OR patient.mrn LIKE :search OR patient.phone LIKE :search', {
+      qb.andWhere('(patient.fullName LIKE :search OR patient.mrn LIKE :search OR patient.phone LIKE :search)', {
         search: `%${search}%`,
       });
     }
+
     return await qb.getMany();
   }
 

@@ -7,20 +7,19 @@ import {
   VersionColumn,
 } from 'typeorm';
 
-export interface PrescriptionItem {
-  drugId: string;
-  drugName: string;
-  dosage: string; // e.g. '500mg'
-  frequency: string; // e.g. 'TID (3x daily)'
-  durationDays: number;
-  quantity: number;
-  notes?: string;
-}
-
 export enum PrescriptionStatus {
   PENDING = 'PENDING',
   DISPENSED = 'DISPENSED',
   CANCELLED = 'CANCELLED',
+}
+
+export interface PrescriptionItem {
+  drugId: string;
+  drugName: string;
+  dosage: string;
+  frequency: string;
+  durationDays: number;
+  quantity: number;
 }
 
 @Entity('prescriptions')
@@ -29,6 +28,9 @@ export class Prescription {
   id: string;
 
   @Column({ nullable: true })
+  tenantId: string;
+
+  @Column()
   consultationId: string;
 
   @Column()
@@ -43,14 +45,14 @@ export class Prescription {
   @Column()
   doctorName: string;
 
+  @Column('simple-json')
+  items: PrescriptionItem[];
+
   @Column({
     type: 'varchar',
     default: PrescriptionStatus.PENDING,
   })
   status: PrescriptionStatus;
-
-  @Column('simple-json')
-  items: PrescriptionItem[];
 
   @Column({ nullable: true })
   dispensedBy: string;

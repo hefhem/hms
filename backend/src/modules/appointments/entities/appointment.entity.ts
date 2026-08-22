@@ -12,8 +12,6 @@ export enum AppointmentStatus {
   CHECKED_IN = 'CHECKED_IN',
   TRIAGED = 'TRIAGED',
   IN_CONSULTATION = 'IN_CONSULTATION',
-  DISPENSED = 'DISPENSED',
-  BILLED = 'BILLED',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
 }
@@ -22,6 +20,9 @@ export enum AppointmentStatus {
 export class Appointment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ nullable: true })
+  tenantId: string;
 
   @Column()
   patientId: string;
@@ -36,19 +37,19 @@ export class Appointment {
   doctorName: string;
 
   @Column()
-  appointmentDate: string; // YYYY-MM-DD or ISO string
+  appointmentDate: string;
 
-  @Column({ default: '09:00 AM' })
-  timeSlot: string; // e.g. '09:00 AM'
+  @Column({ nullable: true })
+  timeSlot: string;
+
+  @Column({ nullable: true })
+  reason: string;
 
   @Column({
     type: 'varchar',
     default: AppointmentStatus.SCHEDULED,
   })
   status: AppointmentStatus;
-
-  @Column({ nullable: true })
-  reason: string;
 
   @VersionColumn()
   version: number;

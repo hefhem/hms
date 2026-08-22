@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { HeartPulse, Lock, Mail, ShieldCheck, ArrowRight, UserCheck } from 'lucide-react';
+import { HeartPulse, Lock, Mail, ShieldCheck, ArrowRight, Building2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -21,10 +21,10 @@ export const LoginView: React.FC = () => {
       const res = await login(email, password);
       if (res.requireMfa) {
         setRequireMfa(true);
-        setTempUserId(email); // will be used to complete OTP
+        setTempUserId(email);
         showToast('info', 'MFA Required', 'Please enter your 6-digit TOTP authenticator code.');
       } else {
-        showToast('success', 'Access Granted', 'Welcome to ApexCare Enterprise HMS');
+        showToast('success', 'Access Granted', 'Welcome to HMS Enterprise Workspace Portal');
       }
     } catch (err: any) {
       showToast('error', 'Authentication Error', err.response?.data?.message || err.message);
@@ -40,7 +40,7 @@ export const LoginView: React.FC = () => {
     setIsLoading(true);
     try {
       await verifyMfa(tempUserId, otpCode);
-      showToast('success', 'MFA Verified', 'Welcome to ApexCare Enterprise HMS');
+      showToast('success', 'MFA Verified', 'Welcome to HMS Enterprise Workspace Portal');
     } catch (err: any) {
       showToast('error', 'Invalid MFA Code', err.response?.data?.message || 'Verification failed');
     } finally {
@@ -48,13 +48,18 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  const quickLoginRoles = [
-    { label: 'Admin', email: 'admin@clinic.com', role: 'ADMIN' },
-    { label: 'Doctor', email: 'doctor@clinic.com', role: 'DOCTOR' },
-    { label: 'Nurse', email: 'nurse@clinic.com', role: 'NURSE' },
-    { label: 'Pharmacist', email: 'pharmacist@clinic.com', role: 'PHARMACIST' },
-    { label: 'Receptionist', email: 'receptionist@clinic.com', role: 'RECEPTIONIST' },
-    { label: 'Billing', email: 'billing@clinic.com', role: 'BILLING_CLERK' },
+  const apexAccounts = [
+    { label: 'Apex Admin', email: 'admin@clinic.com', role: 'ADMIN' },
+    { label: 'Apex Doctor', email: 'doctor@clinic.com', role: 'DOCTOR' },
+    { label: 'Apex Nurse', email: 'nurse@clinic.com', role: 'NURSE' },
+    { label: 'Apex Pharmacist', email: 'pharmacist@clinic.com', role: 'PHARMACIST' },
+  ];
+
+  const stNicholasAccounts = [
+    { label: 'St. Nicholas Doctor', email: 'doctor@stnicholas.com', role: 'DOCTOR' },
+    { label: 'St. Nicholas Admin', email: 'admin@stnicholas.com', role: 'ADMIN' },
+    { label: 'St. Nicholas Nurse', email: 'nurse@stnicholas.com', role: 'NURSE' },
+    { label: 'St. Nicholas Billing', email: 'billing@stnicholas.com', role: 'BILLING_CLERK' },
   ];
 
   return (
@@ -68,8 +73,8 @@ export const LoginView: React.FC = () => {
           <div className="inline-flex p-3 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-2xl shadow-xl shadow-cyan-950/60 mb-4">
             <HeartPulse className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-wide">ApexCare Enterprise</h1>
-          <p className="text-sm text-slate-400 mt-1">Hospital & Clinic Management System</p>
+          <h1 className="text-2xl font-extrabold text-white tracking-wide">ApexCare & Multi-Tenant HMS</h1>
+          <p className="text-sm text-slate-400 mt-1">Multi-Tenant Hospital & Clinic Management System</p>
         </div>
 
         {/* Card */}
@@ -78,7 +83,7 @@ export const LoginView: React.FC = () => {
             <form onSubmit={handleLoginSubmit} className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                  Email Address
+                  Staff Email Address
                 </label>
                 <div className="relative">
                   <Mail className="w-5 h-5 text-slate-500 absolute left-3.5 top-3" />
@@ -87,7 +92,7 @@ export const LoginView: React.FC = () => {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full pl-11 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors font-mono"
                   />
                 </div>
               </div>
@@ -103,7 +108,7 @@ export const LoginView: React.FC = () => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full pl-11 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors font-mono"
                   />
                 </div>
               </div>
@@ -113,7 +118,7 @@ export const LoginView: React.FC = () => {
                 disabled={isLoading}
                 className="w-full py-3 px-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-cyan-950 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
               >
-                {isLoading ? 'Authenticating...' : 'Sign In to Portal'}
+                {isLoading ? 'Authenticating...' : 'Sign In to Hospital Workspace'}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
@@ -146,25 +151,48 @@ export const LoginView: React.FC = () => {
             </form>
           )}
 
-          {/* Quick Seed Logins */}
-          <div className="mt-8 pt-6 border-t border-slate-800">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 text-center">
-              Quick Role Demo Accounts (One-Click)
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {quickLoginRoles.map((r) => (
-                <button
-                  key={r.role}
-                  onClick={() => {
-                    setEmail(r.email);
-                    setPassword('Admin@123456');
-                  }}
-                  className="p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-all text-xs"
-                >
-                  <div className="font-semibold text-white">{r.label}</div>
-                  <div className="text-[10px] text-cyan-400 font-mono">{r.role}</div>
-                </button>
-              ))}
+          {/* Quick Tenant Workspace Demo Logins */}
+          <div className="mt-8 pt-6 border-t border-slate-800 space-y-4">
+            <div>
+              <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Building2 className="w-3 h-3" /> ApexCare Main Center (USD $) Logins:
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {apexAccounts.map((r) => (
+                  <button
+                    key={r.email}
+                    onClick={() => {
+                      setEmail(r.email);
+                      setPassword('Admin@123456');
+                    }}
+                    className="p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl text-left transition-all text-xs"
+                  >
+                    <div className="font-semibold text-white">{r.label}</div>
+                    <div className="text-[9px] text-slate-500 font-mono">{r.email}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Building2 className="w-3 h-3" /> St. Nicholas Specialist Hospital (NGN ₦) Logins:
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {stNicholasAccounts.map((r) => (
+                  <button
+                    key={r.email}
+                    onClick={() => {
+                      setEmail(r.email);
+                      setPassword('Admin@123456');
+                    }}
+                    className="p-2 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-500/30 rounded-xl text-left transition-all text-xs"
+                  >
+                    <div className="font-semibold text-white">{r.label}</div>
+                    <div className="text-[9px] text-purple-300 font-mono">{r.email}</div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

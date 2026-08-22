@@ -82,16 +82,27 @@ export class SeedService implements OnApplicationBootstrap {
     const userCount = await this.userRepository.count();
     if (userCount > 0) return;
 
-    this.logger.log('Seeding initial Enterprise System Users...');
+    const tenants = await this.tenantRepository.find();
+    const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
+    const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
+
+    this.logger.log('Seeding initial Enterprise System Users per Tenant...');
 
     const defaultPassword = await bcrypt.hash('Admin@123456', 10);
     const usersData = [
-      { email: 'admin@clinic.com', fullName: 'Dr. Sarah Connor (Chief Admin)', role: UserRole.ADMIN },
-      { email: 'doctor@clinic.com', fullName: 'Dr. Alexander Fleming (MD Internal)', role: UserRole.DOCTOR },
-      { email: 'nurse@clinic.com', fullName: 'Florence Nightingale (RN)', role: UserRole.NURSE },
-      { email: 'pharmacist@clinic.com', fullName: 'Marcus Vance (PharmD)', role: UserRole.PHARMACIST },
-      { email: 'receptionist@clinic.com', fullName: 'Elena Rostova (Front Desk)', role: UserRole.RECEPTIONIST },
-      { email: 'billing@clinic.com', fullName: 'Arthur Pendelton (Billing Mgr)', role: UserRole.BILLING_CLERK },
+      // ApexCare Staff
+      { tenantId: apexId, email: 'admin@clinic.com', fullName: 'Dr. Sarah Connor (Chief Admin)', role: UserRole.ADMIN },
+      { tenantId: apexId, email: 'doctor@clinic.com', fullName: 'Dr. Alexander Fleming (MD Internal)', role: UserRole.DOCTOR },
+      { tenantId: apexId, email: 'nurse@clinic.com', fullName: 'Florence Nightingale (RN)', role: UserRole.NURSE },
+      { tenantId: apexId, email: 'pharmacist@clinic.com', fullName: 'Marcus Vance (PharmD)', role: UserRole.PHARMACIST },
+      { tenantId: apexId, email: 'receptionist@clinic.com', fullName: 'Elena Rostova (Front Desk)', role: UserRole.RECEPTIONIST },
+      { tenantId: apexId, email: 'billing@clinic.com', fullName: 'Arthur Pendelton (Billing Mgr)', role: UserRole.BILLING_CLERK },
+
+      // St. Nicholas Specialist Hospital Staff
+      { tenantId: stNichId, email: 'doctor@stnicholas.com', fullName: 'Dr. Chidi Okafor (Consultant Surgeon)', role: UserRole.DOCTOR },
+      { tenantId: stNichId, email: 'admin@stnicholas.com', fullName: 'Amina Bello (Hospital Admin)', role: UserRole.ADMIN },
+      { tenantId: stNichId, email: 'nurse@stnicholas.com', fullName: 'Ngozi Eze (RN Senior Nurse)', role: UserRole.NURSE },
+      { tenantId: stNichId, email: 'billing@stnicholas.com', fullName: 'Babajide Adeleke (Accounts Lead)', role: UserRole.BILLING_CLERK },
     ];
 
     for (const u of usersData) {
@@ -99,19 +110,25 @@ export class SeedService implements OnApplicationBootstrap {
         ...u,
         password: defaultPassword,
         mfaEnabled: false,
+        isActive: true,
       });
       await this.userRepository.save(user);
     }
-    this.logger.log('Users successfully seeded.');
+    this.logger.log('Users successfully seeded for tenants.');
   }
 
   private async seedPatients() {
     const patientCount = await this.patientRepository.count();
     if (patientCount > 0) return;
 
-    this.logger.log('Seeding sample patient records...');
+    const tenants = await this.tenantRepository.find();
+    const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
+    const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
+
+    this.logger.log('Seeding sample patient records per Tenant...');
     const demoPatients = [
       {
+        tenantId: apexId,
         mrn: 'MRN-2026-0001',
         fullName: 'Johnathan Edward Doe',
         gender: 'Male',
@@ -123,6 +140,7 @@ export class SeedService implements OnApplicationBootstrap {
         allergies: 'Penicillin, Dust Mites',
       },
       {
+        tenantId: apexId,
         mrn: 'MRN-2026-0002',
         fullName: 'Alice Beatrice Smith',
         gender: 'Female',
@@ -134,13 +152,14 @@ export class SeedService implements OnApplicationBootstrap {
         allergies: 'Sulfa Drugs',
       },
       {
-        mrn: 'MRN-2026-0003',
-        fullName: 'Robert Charles Vance',
+        tenantId: stNichId,
+        mrn: 'MRN-STN-0001',
+        fullName: 'Emeka Olusola Williams',
         gender: 'Male',
-        dateOfBirth: '1975-11-03',
-        phone: '+1 (555) 345-6789',
-        email: 'robert.vance@example.com',
-        address: '27 Pinecrest Road',
+        dateOfBirth: '1980-06-15',
+        phone: '+234 803 123 4567',
+        email: 'emeka.williams@example.com',
+        address: '15 Victoria Island Blvd, Lagos',
         bloodGroup: 'B+',
         allergies: 'None',
       },
@@ -156,9 +175,14 @@ export class SeedService implements OnApplicationBootstrap {
     const drugCount = await this.drugRepository.count();
     if (drugCount > 0) return;
 
-    this.logger.log('Seeding baseline drug inventory catalog...');
+    const tenants = await this.tenantRepository.find();
+    const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
+    const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
+
+    this.logger.log('Seeding baseline drug inventory catalog per Tenant...');
     const demoDrugs = [
       {
+        tenantId: apexId,
         code: 'DRUG-AMOX-500',
         name: 'Amoxicillin Trihydrate 500mg',
         category: 'Antibiotics',
@@ -168,39 +192,23 @@ export class SeedService implements OnApplicationBootstrap {
         unit: 'Capsules',
       },
       {
-        code: 'DRUG-PARA-500',
-        name: 'Paracetamol / Acetaminophen 500mg',
-        category: 'Analgesics & Antipyretics',
-        unitPrice: 3.20,
-        quantityInStock: 500,
+        tenantId: stNichId,
+        code: 'DRUG-STN-AMOX-500',
+        name: 'Amoxicillin Trihydrate 500mg (St. Nicholas)',
+        category: 'Antibiotics',
+        unitPrice: 8500.00,
+        quantityInStock: 400,
         reorderLevel: 50,
-        unit: 'Tablets',
-      },
-      {
-        code: 'DRUG-MET-850',
-        name: 'Metformin Hydrochloride 850mg',
-        category: 'Antidiabetic',
-        unitPrice: 18.00,
-        quantityInStock: 180,
-        reorderLevel: 25,
-        unit: 'Tablets',
-      },
-      {
-        code: 'DRUG-OMEP-20',
-        name: 'Omeprazole Delayed-Release 20mg',
-        category: 'Gastrointestinal',
-        unitPrice: 15.75,
-        quantityInStock: 15,
-        reorderLevel: 20,
         unit: 'Capsules',
       },
       {
-        code: 'DRUG-AML-5',
-        name: 'Amlodipine Besylate 5mg',
-        category: 'Cardiovascular',
-        unitPrice: 9.90,
-        quantityInStock: 300,
-        reorderLevel: 40,
+        tenantId: stNichId,
+        code: 'DRUG-STN-PARA-500',
+        name: 'Paracetamol 500mg Extra (St. Nicholas)',
+        category: 'Analgesics',
+        unitPrice: 1200.00,
+        quantityInStock: 1000,
+        reorderLevel: 100,
         unit: 'Tablets',
       },
     ];
@@ -222,6 +230,7 @@ export class SeedService implements OnApplicationBootstrap {
 
     const demoLabOrders = [
       {
+        tenantId: patients[0].tenantId,
         orderNumber: 'LAB-2026-0001',
         patientId: patients[0].id,
         patientName: patients[0].fullName,
@@ -232,26 +241,6 @@ export class SeedService implements OnApplicationBootstrap {
         sampleBarcode: 'BAR-2026-9011',
         status: LabOrderStatus.SAMPLE_COLLECTED,
         cost: 50.0,
-      },
-      {
-        orderNumber: 'LAB-2026-0002',
-        patientId: patients[1].id,
-        patientName: patients[1].fullName,
-        doctorId: 'doc-1',
-        doctorName: 'Dr. Alexander Fleming (MD Internal)',
-        testName: 'Lipid Profile Panel',
-        specimenType: 'Fasting Blood',
-        sampleBarcode: 'BAR-2026-9012',
-        status: LabOrderStatus.RESULTED,
-        cost: 65.0,
-        performedBy: 'Lead Medical Lab Scientist',
-        testParameters: [
-          { parameter: 'Total Cholesterol', value: '215', unit: 'mg/dL', referenceRange: '< 200', isAbnormal: true },
-          { parameter: 'Triglycerides', value: '140', unit: 'mg/dL', referenceRange: '< 150', isAbnormal: false },
-          { parameter: 'HDL Cholesterol', value: '55', unit: 'mg/dL', referenceRange: '> 40', isAbnormal: false },
-          { parameter: 'LDL Cholesterol', value: '132', unit: 'mg/dL', referenceRange: '< 100', isAbnormal: true },
-        ],
-        labNotes: 'Mild hypercholesterolemia noted. Dietary modifications advised.',
       },
     ];
 
@@ -265,17 +254,16 @@ export class SeedService implements OnApplicationBootstrap {
     const count = await this.serviceRepository.count();
     if (count > 0) return;
 
-    this.logger.log('Seeding baseline Service Master & Price List Catalog...');
+    const tenants = await this.tenantRepository.find();
+    const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
+    const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
+
+    this.logger.log('Seeding baseline Service Master per Tenant...');
 
     const demoServices = [
-      { code: 'SRV-CONS-GEN', name: 'General Doctor Consultation Fee', category: ServiceCategory.CONSULTATION, price: 50.0, taxRate: 0 },
-      { code: 'SRV-CONS-SPEC', name: 'Specialist Physician Consultation', category: ServiceCategory.CONSULTATION, price: 95.0, taxRate: 0 },
-      { code: 'SRV-LAB-CBC', name: 'Complete Blood Count (CBC Panel)', category: ServiceCategory.LABORATORY, price: 50.0, taxRate: 0 },
-      { code: 'SRV-LAB-LIPID', name: 'Lipid Profile Panel', category: ServiceCategory.LABORATORY, price: 65.0, taxRate: 0 },
-      { code: 'SRV-RAD-XRAY', name: 'Chest X-Ray Digital View (PA/AP)', category: ServiceCategory.RADIOLOGY, price: 85.0, taxRate: 0 },
-      { code: 'SRV-RAD-USG', name: 'Abdominal Ultrasound Scan', category: ServiceCategory.RADIOLOGY, price: 120.0, taxRate: 0 },
-      { code: 'SRV-NURS-IV', name: 'IV Cannulation & Infusion Admin', category: ServiceCategory.NURSING, price: 25.0, taxRate: 0 },
-      { code: 'SRV-NURS-DRESS', name: 'Wound Dressing & Sterile Bandaging', category: ServiceCategory.NURSING, price: 35.0, taxRate: 0 },
+      { tenantId: apexId, code: 'SRV-CONS-GEN', name: 'General Doctor Consultation Fee', category: ServiceCategory.CONSULTATION, price: 50.0, taxRate: 0 },
+      { tenantId: stNichId, code: 'SRV-STN-CONS', name: 'St. Nicholas Specialist Consultation Fee', category: ServiceCategory.CONSULTATION, price: 35000.0, taxRate: 0 },
+      { tenantId: stNichId, code: 'SRV-STN-LAB-CBC', name: 'St. Nicholas Complete Blood Count', category: ServiceCategory.LABORATORY, price: 25000.0, taxRate: 0 },
     ];
 
     for (const s of demoServices) {
@@ -295,6 +283,7 @@ export class SeedService implements OnApplicationBootstrap {
 
     const demoRad = [
       {
+        tenantId: patients[0].tenantId,
         orderNumber: 'RAD-2026-0001',
         patientId: patients[0].id,
         patientName: patients[0].fullName,
@@ -304,9 +293,9 @@ export class SeedService implements OnApplicationBootstrap {
         procedureName: 'Chest X-Ray Digital View (PA)',
         status: RadiologyStatus.REPORTED,
         cost: 85.0,
-        radiologistNotes: 'Normal bronchovascular markings. No pulmonary consolidation or pleural effusion.',
+        radiologistNotes: 'Normal bronchovascular markings.',
         impression: 'Unremarkable Chest Radiograph.',
-        reportedBy: 'Dr. Evelyn Reed (Consultant Radiologist)',
+        reportedBy: 'Dr. Evelyn Reed',
       },
     ];
 
@@ -319,14 +308,15 @@ export class SeedService implements OnApplicationBootstrap {
     const count = await this.bedRepository.count();
     if (count > 0) return;
 
-    this.logger.log('Seeding baseline IPD Bed Board...');
+    const tenants = await this.tenantRepository.find();
+    const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
+    const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
+
+    this.logger.log('Seeding baseline IPD Bed Board per Tenant...');
 
     const demoBeds = [
-      { bedNumber: 'BED-101', wardName: 'General Male Ward', bedClass: 'GENERAL', pricePerNight: 80.0, status: BedStatus.VACANT },
-      { bedNumber: 'BED-102', wardName: 'General Male Ward', bedClass: 'GENERAL', pricePerNight: 80.0, status: BedStatus.VACANT },
-      { bedNumber: 'BED-201', wardName: 'Female Surgical Ward', bedClass: 'PRIVATE', pricePerNight: 150.0, status: BedStatus.VACANT },
-      { bedNumber: 'ICU-01', wardName: 'Intensive Care Unit (ICU)', bedClass: 'ICU', pricePerNight: 350.0, status: BedStatus.VACANT },
-      { bedNumber: 'SUITE-01', wardName: 'Executive VIP Suite', bedClass: 'PRIVATE', pricePerNight: 450.0, status: BedStatus.VACANT },
+      { tenantId: apexId, bedNumber: 'BED-101', wardName: 'General Male Ward', bedClass: 'GENERAL', pricePerNight: 80.0, status: BedStatus.VACANT },
+      { tenantId: stNichId, bedNumber: 'STN-BED-101', wardName: 'St. Nicholas Private Ward A', bedClass: 'PRIVATE', pricePerNight: 75000.0, status: BedStatus.VACANT },
     ];
 
     for (const b of demoBeds) {
@@ -338,14 +328,15 @@ export class SeedService implements OnApplicationBootstrap {
     const count = await this.hmoProviderRepository.count();
     if (count > 0) return;
 
-    this.logger.log('Seeding baseline HMO Providers Master...');
+    const tenants = await this.tenantRepository.find();
+    const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
+    const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
+
+    this.logger.log('Seeding baseline HMO Providers Master per Tenant...');
 
     const demoProviders = [
-      { code: 'HMO-REL', name: 'Reliance HMO', planType: 'Comprehensive Corporate', contactEmail: 'claims@reliancehmo.com', contactPhone: '+1 (555) 019-2831' },
-      { code: 'HMO-HYG', name: 'Hygeia HMO', planType: 'Gold & Executive Care', contactEmail: 'auth@hygeiahmo.com', contactPhone: '+1 (555) 018-4921' },
-      { code: 'HMO-AXA', name: 'AXA Mansard Insurance', planType: 'International Health Plan', contactEmail: 'health@axamansard.com', contactPhone: '+1 (555) 017-9920' },
-      { code: 'HMO-BUP', name: 'Bupa International', planType: 'Expatriate Global Cover', contactEmail: 'claims@bupa.com', contactPhone: '+44 20 7654 3210' },
-      { code: 'HMO-NHIA', name: 'NHIA National Scheme', planType: 'Public Sector Health Scheme', contactEmail: 'info@nhia.gov.ng', contactPhone: '+234 9 461 4000' },
+      { tenantId: apexId, code: 'HMO-REL', name: 'Reliance HMO', planType: 'Comprehensive Corporate', contactEmail: 'claims@reliancehmo.com', contactPhone: '+1 (555) 019-2831' },
+      { tenantId: stNichId, code: 'HMO-HYG-NG', name: 'Hygeia HMO Nigeria', planType: 'Gold & Executive Care', contactEmail: 'auth@hygeiahmo.com', contactPhone: '+234 1 271 0000' },
     ];
 
     for (const p of demoProviders) {
@@ -364,6 +355,7 @@ export class SeedService implements OnApplicationBootstrap {
 
     const demoClaims = [
       {
+        tenantId: patients[0].tenantId,
         claimNumber: 'CLM-2026-0001',
         patientId: patients[0].id,
         patientName: patients[0].fullName,

@@ -62,6 +62,7 @@ export class AuthService {
       accessToken: token,
       user: {
         id: user.id,
+        tenantId: user.tenantId,
         email: user.email,
         fullName: user.fullName,
         role: user.role,
@@ -181,6 +182,7 @@ export class AuthService {
   private generateJwtToken(user: any) {
     const payload = {
       sub: user.id,
+      tenantId: user.tenantId,
       email: user.email,
       role: user.role,
     };
