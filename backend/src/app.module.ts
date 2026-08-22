@@ -23,6 +23,8 @@ import { Admission } from './modules/ipd/entities/admission.entity';
 import { HmoClaim } from './modules/insurance/entities/hmo-claim.entity';
 import { HmoProvider } from './modules/insurance/entities/hmo-provider.entity';
 import { Tenant } from './modules/tenants/entities/tenant.entity';
+import { SubscriptionPlan } from './modules/tenants/entities/subscription-plan.entity';
+import { TenantSubscriptionInvoice } from './modules/tenants/entities/tenant-subscription-invoice.entity';
 import { Notification } from './modules/notification/entities/notification.entity';
 
 import { UsersModule } from './modules/users/users.module';
@@ -89,6 +91,8 @@ import { SeedService } from './database/seed.service';
           HmoClaim,
           HmoProvider,
           Tenant,
+          SubscriptionPlan,
+          TenantSubscriptionInvoice,
           Notification,
         ];
 
@@ -128,6 +132,8 @@ import { SeedService } from './database/seed.service';
       HmoClaim,
       HmoProvider,
       Tenant,
+      SubscriptionPlan,
+      TenantSubscriptionInvoice,
       Notification,
     ]),
 

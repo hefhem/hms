@@ -63,10 +63,10 @@ export class Tenant {
   @Column({ default: 500 })
   maxPatientsQuota: number;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ nullable: true })
   subscriptionStartDate: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ nullable: true })
   subscriptionEndDate: Date;
 
   @Column({ default: 'ACTIVE' })

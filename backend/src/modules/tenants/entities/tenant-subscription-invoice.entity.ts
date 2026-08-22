@@ -29,10 +29,10 @@ export class TenantSubscriptionInvoice {
   @Column({ default: 30 })
   billingCycleDays: number;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ nullable: true })
   dueDate: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ nullable: true })
   paidAt: Date;
 
   @Column({ type: 'varchar', default: SubscriptionInvoiceStatus.PAID })
