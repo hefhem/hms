@@ -70,8 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       id: 'saas',
       title: '🏢 Multi-Tenant SaaS Platform',
       items: [
-        { id: 'platform', label: 'SaaS SuperAdmin Platform', icon: Building2, roles: ['ADMIN'] },
-        { id: 'tenants', label: 'Tenant Workspaces List', icon: Globe, roles: ['ADMIN'] },
+        { id: 'platform', label: 'SaaS Platform Portal', icon: Building2, roles: ['ADMIN'] },
       ],
     },
     {
