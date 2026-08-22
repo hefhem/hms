@@ -14,6 +14,9 @@ export class SubscriptionPlan {
   @Column('decimal', { precision: 12, scale: 2, default: 0 })
   pricePerMonth: number;
 
+  @Column({ default: 'USD' })
+  currency: string; // e.g. USD, NGN, EUR, GBP
+
   @Column({ default: 30 })
   billingCycleDays: number; // e.g. 30 days, 365 days
 

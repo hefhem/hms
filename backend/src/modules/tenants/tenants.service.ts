@@ -48,6 +48,7 @@ export class TenantsService implements OnModuleInit {
         code: 'STARTER',
         name: 'Starter Tier Plan',
         pricePerMonth: 99.0,
+        currency: 'USD',
         billingCycleDays: 30,
         maxPatientsQuota: 200,
         maxUsersQuota: 10,
@@ -58,6 +59,7 @@ export class TenantsService implements OnModuleInit {
         code: 'PROFESSIONAL',
         name: 'Professional Tier Plan',
         pricePerMonth: 299.0,
+        currency: 'USD',
         billingCycleDays: 30,
         maxPatientsQuota: 2000,
         maxUsersQuota: 50,
@@ -68,6 +70,7 @@ export class TenantsService implements OnModuleInit {
         code: 'ENTERPRISE',
         name: 'Enterprise Care Tier Plan',
         pricePerMonth: 799.0,
+        currency: 'USD',
         billingCycleDays: 30,
         maxPatientsQuota: 10000,
         maxUsersQuota: 500,
@@ -83,6 +86,7 @@ export class TenantsService implements OnModuleInit {
         await this.planRepository.save(plan);
       } else {
         plan.features = allFeatures;
+        if (!plan.currency) plan.currency = p.currency;
         await this.planRepository.save(plan);
       }
     }
