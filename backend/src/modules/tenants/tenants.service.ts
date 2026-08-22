@@ -138,11 +138,9 @@ export class TenantsService implements OnModuleInit {
 
       if (!startDate) {
         startDate = t.createdAt || new Date();
-        t.subscriptionStartDate = startDate;
       }
       if (!endDate) {
         endDate = new Date(new Date(startDate).getTime() + (plan ? plan.billingCycleDays : 30) * 24 * 60 * 60 * 1000);
-        t.subscriptionEndDate = endDate;
       }
 
       let subStatus = 'ACTIVE';
@@ -161,16 +159,14 @@ export class TenantsService implements OnModuleInit {
         }
       }
 
-      t.subscriptionStatus = subStatus;
-      await this.tenantRepository.save(t);
-
       result.push({
         ...t,
+        subscriptionStartDate: startDate,
+        subscriptionEndDate: endDate,
         subscriptionStatus: subStatus,
         daysDifference: daysDiff,
       });
     }
-
     return result;
   }
 
@@ -310,24 +306,27 @@ export class TenantsService implements OnModuleInit {
   async update(id: string, data: Partial<Tenant> & { subscriptionStartDate?: string | Date }): Promise<Tenant> {
     const tenant = await this.findOne(id);
 
-    if (data.plan || data.subscriptionStartDate) {
+    const { subscriptionStartDate, ...restData } = data;
+    Object.assign(tenant, restData);
+
+    if (data.plan || subscriptionStartDate) {
       const planCode = data.plan || tenant.plan;
       const plan = await this.planRepository.findOne({ where: { code: planCode } });
+
       if (plan) {
         tenant.plan = planCode as any;
         tenant.maxUsers = plan.maxUsersQuota;
         tenant.maxPatientsQuota = plan.maxPatientsQuota;
 
-        const startDate = data.subscriptionStartDate
-          ? new Date(data.subscriptionStartDate)
-          : (tenant.subscriptionStartDate || new Date());
+        const startDate = subscriptionStartDate
+          ? new Date(subscriptionStartDate)
+          : (tenant.subscriptionStartDate ? new Date(tenant.subscriptionStartDate) : new Date());
 
         tenant.subscriptionStartDate = startDate;
-        tenant.subscriptionEndDate = new Date(new Date(startDate).getTime() + plan.billingCycleDays * 24 * 60 * 60 * 1000);
+        tenant.subscriptionEndDate = new Date(startDate.getTime() + plan.billingCycleDays * 24 * 60 * 60 * 1000);
       }
     }
 
-    Object.assign(tenant, data);
     return await this.tenantRepository.save(tenant);
   }
 

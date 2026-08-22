@@ -89,9 +89,12 @@ export class SeedService implements OnApplicationBootstrap {
         existing.plan = t.plan;
         existing.maxUsers = t.maxUsers;
         existing.maxPatientsQuota = t.maxPatientsQuota;
-        existing.subscriptionStartDate = t.subscriptionStartDate;
-        existing.subscriptionEndDate = t.subscriptionEndDate;
-        existing.subscriptionStatus = t.subscriptionStatus;
+        if (!existing.subscriptionStartDate) {
+          existing.subscriptionStartDate = t.subscriptionStartDate;
+        }
+        if (!existing.subscriptionEndDate) {
+          existing.subscriptionEndDate = t.subscriptionEndDate;
+        }
         await this.tenantRepository.save(existing);
       }
     }
