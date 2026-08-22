@@ -17,6 +17,7 @@ import {
   UserCheck,
   ChevronDown,
   ChevronRight,
+  Globe,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -34,6 +35,7 @@ export type TabType =
   | 'insurance'
   | 'masterdata'
   | 'users'
+  | 'tenants'
   | 'audit';
 
 interface SidebarProps {
@@ -99,6 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       items: [
         { id: 'masterdata', label: 'Master Data Catalog', icon: Database, roles: ['ADMIN', 'BILLING_CLERK'] },
         { id: 'users', label: 'User Roles & Staff', icon: UserCheck, roles: ['ADMIN'] },
+        { id: 'tenants', label: 'Tenant Platform', icon: Globe, roles: ['ADMIN'] },
         { id: 'audit', label: 'System Audit Logs', icon: ShieldCheck, roles: ['ADMIN'] },
       ],
     },
@@ -171,9 +174,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       <div className="p-4 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
         <span className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          PostgreSQL / SQLite
+          Multi-Tenant Engine
         </span>
-        <span className="text-slate-600">v2.0.0</span>
+        <span className="text-slate-600">v2.1.0</span>
       </div>
     </aside>
   );

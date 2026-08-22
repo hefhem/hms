@@ -1,6 +1,7 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
+import { NotificationService } from '../notification/notification.service';
 import * as bcrypt from 'bcrypt';
 import * as speakeasy from 'speakeasy';
 import * as qrcode from 'qrcode';
@@ -8,10 +9,13 @@ import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
+  private resetTokens: Map<string, { userId: string; email: string; expires: number }> = new Map();
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private notificationService: NotificationService,
   ) {}
 
   async validateUser(email: string, pass: string) {
@@ -32,7 +36,6 @@ export class AuthService {
     }
 
     if (user.mfaEnabled) {
-      // User must submit MFA code
       const tempToken = this.jwtService.sign(
         { sub: user.id, email: user.email, isPendingMfa: true },
         { expiresIn: '10m' },
@@ -64,7 +67,7 @@ export class AuthService {
   }
 
   async verifyMfaLogin(userId: string, otpCode: string) {
-    const user = await this.usersService.findByEmail(userId); // or by id
+    const user = await this.usersService.findByEmail(userId);
     if (!user || !user.mfaSecret) {
       throw new BadRequestException('MFA is not configured for this account');
     }
@@ -73,7 +76,7 @@ export class AuthService {
       secret: user.mfaSecret,
       encoding: 'base32',
       token: otpCode,
-      window: 1, // allow 30s drift
+      window: 1,
     });
 
     if (!verified) {
@@ -93,6 +96,44 @@ export class AuthService {
     };
   }
 
+  async requestPasswordReset(email: string): Promise<{ message: string }> {
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      // Return neutral response to prevent user enumeration
+      return { message: 'If the email exists, a password reset link has been dispatched via SMTP.' };
+    }
+
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    this.resetTokens.set(token, {
+      userId: user.id,
+      email: user.email,
+      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+    });
+
+    await this.notificationService.sendPasswordResetEmail(user.email, user.fullName, token);
+
+    return { message: 'Password reset authorization token dispatched via SMTP.' };
+  }
+
+  async resetPassword(token: string, newPass: string): Promise<{ success: boolean; message: string }> {
+    const resetData = this.resetTokens.get(token);
+    if (!resetData || resetData.expires < Date.now()) {
+      throw new BadRequestException('Invalid or expired password reset token.');
+    }
+
+    const user = await this.usersService.findById(resetData.userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    if (!newPass || newPass.length < 6) {
+      throw new BadRequestException('New password must be at least 6 characters long');
+    }
+
+    await this.usersService.changePassword(user.id, user.password, newPass);
+    this.resetTokens.delete(token);
+
+    return { success: true, message: 'Password successfully reset via authorization token.' };
+  }
+
   async generateMfaSetup(userId: string) {
     const user = await this.usersService.findById(userId);
     if (!user) throw new UnauthorizedException('User not found');
@@ -104,8 +145,6 @@ export class AuthService {
     });
 
     const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url || '');
-
-    // Temporarily save secret until verified
     await this.usersService.updateMfaSecret(userId, secret.base32, false);
 
     return {

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UserRole } from '../../common/enums/role.enum';
+import { NotificationService } from '../notification/notification.service';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    private notificationService: NotificationService,
   ) {}
 
   async create(data: { email: string; password?: string; fullName: string; role?: UserRole }): Promise<User> {
@@ -18,7 +20,8 @@ export class UsersService {
       throw new ConflictException(`User with email ${data.email} already exists`);
     }
 
-    const hashedPassword = await bcrypt.hash(data.password || 'Password@123', 10);
+    const rawPassword = data.password || 'Password@123';
+    const hashedPassword = await bcrypt.hash(rawPassword, 10);
     const user = this.usersRepository.create({
       email: data.email,
       password: hashedPassword,
@@ -26,7 +29,12 @@ export class UsersService {
       role: data.role || UserRole.DOCTOR,
     });
 
-    return await this.usersRepository.save(user);
+    const saved = await this.usersRepository.save(user);
+
+    // Send Welcome Email via SMTP
+    await this.notificationService.sendWelcomeEmail(saved.email, saved.fullName, saved.role, rawPassword);
+
+    return saved;
   }
 
   async findAll(): Promise<User[]> {
@@ -86,6 +94,9 @@ export class UsersService {
     user.password = await bcrypt.hash(newPass, 10);
     await this.usersRepository.save(user);
 
-    return { success: true, message: 'Password changed successfully.' };
+    // Send Password Change Security Confirmation Email via SMTP
+    await this.notificationService.sendPasswordChangeConfirmationEmail(user.email, user.fullName);
+
+    return { success: true, message: 'Password changed successfully. Security notification sent.' };
   }
 }

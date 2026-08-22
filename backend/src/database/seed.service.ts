@@ -11,6 +11,7 @@ import { RadiologyOrder, RadiologyStatus } from '../modules/radiology/entities/r
 import { Bed, BedStatus } from '../modules/ipd/entities/bed.entity';
 import { HmoClaim, ClaimStatus } from '../modules/insurance/entities/hmo-claim.entity';
 import { HmoProvider } from '../modules/insurance/entities/hmo-provider.entity';
+import { Tenant, TenantStatus, TenantPlan } from '../modules/tenants/entities/tenant.entity';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -27,9 +28,11 @@ export class SeedService implements OnApplicationBootstrap {
     @InjectRepository(Bed) private bedRepository: Repository<Bed>,
     @InjectRepository(HmoClaim) private hmoClaimRepository: Repository<HmoClaim>,
     @InjectRepository(HmoProvider) private hmoProviderRepository: Repository<HmoProvider>,
+    @InjectRepository(Tenant) private tenantRepository: Repository<Tenant>,
   ) {}
 
   async onApplicationBootstrap() {
+    await this.seedTenants();
     await this.seedUsers();
     await this.seedPatients();
     await this.seedPharmacy();
@@ -39,6 +42,40 @@ export class SeedService implements OnApplicationBootstrap {
     await this.seedBeds();
     await this.seedHmoProviders();
     await this.seedInsurance();
+  }
+
+  private async seedTenants() {
+    const count = await this.tenantRepository.count();
+    if (count > 0) return;
+
+    this.logger.log('Seeding baseline Multi-Tenant Workspaces...');
+    const demoTenants = [
+      {
+        name: 'ApexCare Main Medical Center',
+        subdomain: 'apexcare',
+        currency: 'USD',
+        plan: TenantPlan.ENTERPRISE,
+        maxUsers: 250,
+        contactEmail: 'admin@apexcare.clinic',
+        contactPhone: '+1 (555) 019-2831',
+        status: TenantStatus.ACTIVE,
+      },
+      {
+        name: 'St. Nicholas Specialist Hospital',
+        subdomain: 'stnicholas',
+        currency: 'NGN',
+        plan: TenantPlan.PROFESSIONAL,
+        maxUsers: 100,
+        contactEmail: 'info@stnicholas.com',
+        contactPhone: '+234 1 271 0000',
+        status: TenantStatus.ACTIVE,
+      },
+    ];
+
+    for (const t of demoTenants) {
+      await this.tenantRepository.save(this.tenantRepository.create(t));
+    }
+    this.logger.log('Tenants seeded.');
   }
 
   private async seedUsers() {

@@ -22,6 +22,7 @@ import { Bed } from './modules/ipd/entities/bed.entity';
 import { Admission } from './modules/ipd/entities/admission.entity';
 import { HmoClaim } from './modules/insurance/entities/hmo-claim.entity';
 import { HmoProvider } from './modules/insurance/entities/hmo-provider.entity';
+import { Tenant } from './modules/tenants/entities/tenant.entity';
 
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -38,6 +39,7 @@ import { ServicesModule } from './modules/services/services.module';
 import { RadiologyModule } from './modules/radiology/radiology.module';
 import { IpdModule } from './modules/ipd/ipd.module';
 import { InsuranceModule } from './modules/insurance/insurance.module';
+import { TenantsModule } from './modules/tenants/tenants.module';
 
 import { ConcurrencyExceptionFilter } from './common/filters/concurrency-exception.filter';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
@@ -85,6 +87,7 @@ import { SeedService } from './database/seed.service';
           Admission,
           HmoClaim,
           HmoProvider,
+          Tenant,
         ];
 
         if (dbType === 'sqlite') {
@@ -122,6 +125,7 @@ import { SeedService } from './database/seed.service';
       Admission,
       HmoClaim,
       HmoProvider,
+      Tenant,
     ]),
 
     NotificationModule,
@@ -139,6 +143,7 @@ import { SeedService } from './database/seed.service';
     RadiologyModule,
     IpdModule,
     InsuranceModule,
+    TenantsModule,
   ],
   providers: [
     SeedService,
