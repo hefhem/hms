@@ -117,8 +117,7 @@ export const PlatformAdminView: React.FC = () => {
     subdomain: '',
     currency: 'USD',
     plan: 'PROFESSIONAL',
-    maxUsers: 50,
-    maxPatientsQuota: 2000,
+    subscriptionStartDate: new Date().toISOString().split('T')[0],
     contactEmail: '',
     contactPhone: '',
   });
@@ -1692,25 +1691,39 @@ export const PlatformAdminView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max Patient Quota</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Subscription Start Date</label>
                   <input
-                    type="number"
-                    value={editingTenant.maxPatientsQuota}
-                    onChange={(e) => setEditingTenant({ ...editingTenant, maxPatientsQuota: parseInt(e.target.value) || 500 })}
+                    type="date"
+                    required
+                    value={editingTenant.subscriptionStartDate ? new Date(editingTenant.subscriptionStartDate).toISOString().split('T')[0] : ''}
+                    onChange={(e) => setEditingTenant({ ...editingTenant, subscriptionStartDate: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Max Staff Quota</label>
-                <input
-                  type="number"
-                  value={editingTenant.maxUsers}
-                  onChange={(e) => setEditingTenant({ ...editingTenant, maxUsers: parseInt(e.target.value) || 10 })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
-                />
-              </div>
+              {/* Derived Plan Quota & Billing Cycle Information Card */}
+              {(() => {
+                const selPlan = plans.find((p) => p.code === editingTenant.plan);
+                const startDateObj = editingTenant.subscriptionStartDate ? new Date(editingTenant.subscriptionStartDate) : new Date();
+                const cycleDays = selPlan ? selPlan.billingCycleDays : 30;
+                const computedDue = new Date(startDateObj.getTime() + cycleDays * 24 * 60 * 60 * 1000).toLocaleDateString();
+
+                return (
+                  <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-2xl space-y-1.5 text-xs font-mono">
+                    <div className="flex justify-between text-cyan-400 font-bold text-[11px]">
+                      <span>⚡ Tier Quotas (Derived):</span>
+                      <span>{selPlan ? selPlan.name : editingTenant.plan}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300">
+                      <div>• Patient Quota: <strong className="text-white">{selPlan ? selPlan.maxPatientsQuota : 'Auto'} Patients</strong></div>
+                      <div>• Staff Quota: <strong className="text-white">{selPlan ? selPlan.maxUsersQuota : 'Auto'} Staff</strong></div>
+                      <div>• Billing Cycle: <strong className="text-white">{cycleDays} Days</strong></div>
+                      <div>• Calculated Due: <strong className="text-amber-400">{computedDue}</strong></div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Contact Email</label>
@@ -2050,15 +2063,39 @@ export const PlatformAdminView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max Staff Quota</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Subscription Start Date</label>
                   <input
-                    type="number"
-                    value={createTenantForm.maxUsers}
-                    onChange={(e) => setCreateTenantForm({ ...createTenantForm, maxUsers: parseInt(e.target.value) || 10 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    type="date"
+                    required
+                    value={createTenantForm.subscriptionStartDate}
+                    onChange={(e) => setCreateTenantForm({ ...createTenantForm, subscriptionStartDate: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
                   />
                 </div>
               </div>
+
+              {/* Derived Plan Quota & Billing Cycle Information Card */}
+              {(() => {
+                const selPlan = plans.find((p) => p.code === createTenantForm.plan);
+                const startDateObj = createTenantForm.subscriptionStartDate ? new Date(createTenantForm.subscriptionStartDate) : new Date();
+                const cycleDays = selPlan ? selPlan.billingCycleDays : 30;
+                const computedDue = new Date(startDateObj.getTime() + cycleDays * 24 * 60 * 60 * 1000).toLocaleDateString();
+
+                return (
+                  <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-2xl space-y-1.5 text-xs font-mono">
+                    <div className="flex justify-between text-cyan-400 font-bold text-[11px]">
+                      <span>⚡ Tier Quotas & Billing (Auto-Derived):</span>
+                      <span>{selPlan ? selPlan.name : createTenantForm.plan}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300">
+                      <div>• Patient Quota: <strong className="text-white">{selPlan ? selPlan.maxPatientsQuota : 'Auto'} Patients</strong></div>
+                      <div>• Staff Quota: <strong className="text-white">{selPlan ? selPlan.maxUsersQuota : 'Auto'} Staff</strong></div>
+                      <div>• Billing Cycle: <strong className="text-white">{cycleDays} Days</strong></div>
+                      <div>• Calculated Due: <strong className="text-amber-400">{computedDue}</strong></div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Contact Email (Dispatches Welcome Mail)</label>

@@ -180,6 +180,7 @@ export class TenantsService implements OnModuleInit {
     subdomain: string;
     currency?: string;
     plan?: TenantPlan;
+    subscriptionStartDate?: string | Date;
     maxUsers?: number;
     maxPatientsQuota?: number;
     contactEmail?: string;
@@ -198,13 +199,17 @@ export class TenantsService implements OnModuleInit {
       throw new ConflictException('Tenant with this name or subdomain already exists');
     }
 
-    // Lookup Subscription Plan details to set quotas
+    // Lookup Subscription Plan details to derive quotas & billing cycle
     const planCode = data.plan || TenantPlan.PROFESSIONAL;
     const plan = await this.planRepository.findOne({ where: { code: planCode } });
 
-    const startDate = new Date();
+    const startDate = data.subscriptionStartDate ? new Date(data.subscriptionStartDate) : new Date();
     const billingDays = plan ? plan.billingCycleDays : 30;
     const endDate = new Date(startDate.getTime() + billingDays * 24 * 60 * 60 * 1000);
+
+    // Deriving quotas from subscription tier
+    const derivedMaxUsers = plan ? plan.maxUsersQuota : 50;
+    const derivedMaxPatients = plan ? plan.maxPatientsQuota : 2000;
 
     const tenant = this.tenantRepository.create({
       ...data,
@@ -214,8 +219,8 @@ export class TenantsService implements OnModuleInit {
       status: TenantStatus.ACTIVE,
       isLocked: false,
       isMaintenanceMode: false,
-      maxUsers: data.maxUsers || (plan ? plan.maxUsersQuota : 50),
-      maxPatientsQuota: data.maxPatientsQuota || (plan ? plan.maxPatientsQuota : 2000),
+      maxUsers: derivedMaxUsers,
+      maxPatientsQuota: derivedMaxPatients,
       subscriptionStartDate: startDate,
       subscriptionEndDate: endDate,
       subscriptionStatus: 'ACTIVE',
@@ -274,9 +279,10 @@ export class TenantsService implements OnModuleInit {
             <p style="margin: 4px 0;"><strong>Admin Login Email:</strong> ${defaultEmail}</p>
             <p style="margin: 4px 0;"><strong>Temporary Password:</strong> ${tempPassword}</p>
             <p style="margin: 4px 0;"><strong>Subscription Tier:</strong> ${planCode} (${savedTenant.currency})</p>
-            <p style="margin: 4px 0;"><strong>Staff Account Quota:</strong> ${savedTenant.maxUsers} Staff Accounts</p>
-            <p style="margin: 4px 0;"><strong>Patient Onboarding Quota:</strong> ${savedTenant.maxPatientsQuota} Patients</p>
-            <p style="margin: 4px 0;"><strong>Subscription Expiry:</strong> ${endDate.toLocaleDateString()}</p>
+            <p style="margin: 4px 0;"><strong>Staff Account Quota:</strong> ${savedTenant.maxUsers} Staff Accounts (Derived)</p>
+            <p style="margin: 4px 0;"><strong>Patient Onboarding Quota:</strong> ${savedTenant.maxPatientsQuota} Patients (Derived)</p>
+            <p style="margin: 4px 0;"><strong>Subscription Start Date:</strong> ${startDate.toLocaleDateString()}</p>
+            <p style="margin: 4px 0;"><strong>Subscription Expiry / Due Date:</strong> ${endDate.toLocaleDateString()}</p>
           </div>
 
           <p style="font-size: 13px; color: #cbd5e1;">Please login to your portal and update your password immediately upon first access.</p>
@@ -290,8 +296,26 @@ export class TenantsService implements OnModuleInit {
     return savedTenant;
   }
 
-  async update(id: string, data: Partial<Tenant>): Promise<Tenant> {
+  async update(id: string, data: Partial<Tenant> & { subscriptionStartDate?: string | Date }): Promise<Tenant> {
     const tenant = await this.findOne(id);
+
+    if (data.plan || data.subscriptionStartDate) {
+      const planCode = data.plan || tenant.plan;
+      const plan = await this.planRepository.findOne({ where: { code: planCode } });
+      if (plan) {
+        tenant.plan = planCode as any;
+        tenant.maxUsers = plan.maxUsersQuota;
+        tenant.maxPatientsQuota = plan.maxPatientsQuota;
+
+        const startDate = data.subscriptionStartDate
+          ? new Date(data.subscriptionStartDate)
+          : (tenant.subscriptionStartDate || new Date());
+
+        tenant.subscriptionStartDate = startDate;
+        tenant.subscriptionEndDate = new Date(new Date(startDate).getTime() + plan.billingCycleDays * 24 * 60 * 60 * 1000);
+      }
+    }
+
     Object.assign(tenant, data);
     return await this.tenantRepository.save(tenant);
   }
