@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -10,6 +10,15 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get('me')
+  async getMyProfile(@CurrentUser() currentUser: any) {
+    if (!currentUser || !currentUser.id) throw new NotFoundException('User profile not found');
+    const user = await this.usersService.findById(currentUser.id);
+    if (!user) throw new NotFoundException('User profile not found');
+    const { password, mfaSecret, ...result } = user;
+    return result;
+  }
 
   @Get()
   @Roles(UserRole.ADMIN)

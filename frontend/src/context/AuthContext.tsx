@@ -3,6 +3,7 @@ import api from '../services/api';
 
 export interface User {
   id: string;
+  tenantId?: string;
   email: string;
   fullName: string;
   role: 'ADMIN' | 'DOCTOR' | 'NURSE' | 'PHARMACIST' | 'RECEPTIONIST' | 'BILLING_CLERK';
@@ -39,16 +40,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUser = async () => {
     try {
-      const res = await api.get('/users/profile');
+      const res = await api.get('/users/me');
       setUser(res.data);
       localStorage.setItem('hms_user', JSON.stringify(res.data));
-    } catch (err) {
-      logout();
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        logout();
+      }
     }
   };
 
   const login = async (email: string, pass: string) => {
-    const res = await api.post('/auth/login', { email, pass });
+    const res = await api.post('/auth/login', { email, password: pass });
     if (res.data.requireMfa) {
       return { requireMfa: true, tempToken: res.data.tempToken };
     }

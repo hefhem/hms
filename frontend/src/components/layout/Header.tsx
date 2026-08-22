@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ShieldAlert, LogOut, Sparkles, Globe, KeyRound, Bell, Check, Clock, X, Building2 } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, LogOut, Globe, KeyRound, Bell, Check, Clock, Building2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import api from '../../services/api';
@@ -16,37 +16,32 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMfa, onOpenCurrency, onOpe
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [tenants, setTenants] = useState<any[]>([]);
-  const [selectedTenantId, setSelectedTenantId] = useState<string>('');
+  const [activeTenant, setActiveTenant] = useState<any>(null);
 
   useEffect(() => {
     if (user) {
       fetchNotifications();
-      fetchTenants();
+      fetchTenantDetails();
       const interval = setInterval(fetchNotifications, 10000);
       return () => clearInterval(interval);
     }
   }, [user]);
 
-  const fetchTenants = async () => {
+  const fetchTenantDetails = async () => {
     try {
       const res = await api.get('/tenants');
-      setTenants(res.data);
-      if (res.data.length > 0 && !selectedTenantId) {
-        setSelectedTenantId(res.data[0].id);
+      const tenantList = res.data;
+      if (tenantList.length > 0) {
+        const found = tenantList.find((t: any) => t.id === user?.tenantId) || tenantList[0];
+        setActiveTenant(found);
+        if (found && found.currency) {
+          const symbols: Record<string, string> = { USD: '$', NGN: '₦', EUR: '€', GBP: '£', CAD: '$' };
+          const sym = symbols[found.currency] || '$';
+          updateCurrency(found.currency, sym);
+        }
       }
     } catch (err) {
       // silent catch
-    }
-  };
-
-  const handleTenantSwitch = (tenantId: string) => {
-    setSelectedTenantId(tenantId);
-    const tenant = tenants.find((t) => t.id === tenantId);
-    if (tenant && tenant.currency) {
-      const symbols: Record<string, string> = { USD: '$', NGN: '₦', EUR: '€', GBP: '£', CAD: '$' };
-      const sym = symbols[tenant.currency] || '$';
-      updateCurrency(tenant.currency, sym);
     }
   };
 
@@ -92,21 +87,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMfa, onOpenCurrency, onOpe
   return (
     <header className="bg-slate-900/90 border-b border-slate-800 px-6 py-3.5 flex items-center justify-between sticky top-0 z-[110] backdrop-blur-md">
       <div className="flex items-center gap-3">
-        {/* Workspace Switcher Selector */}
-        {tenants.length > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1 bg-purple-950/40 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300">
+        {/* Static Logged-On Hospital Company Badge (No Dropdown Selector) */}
+        {activeTenant && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-950/40 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 shadow-sm">
             <Building2 className="w-4 h-4 text-purple-400 shrink-0" />
-            <select
-              value={selectedTenantId}
-              onChange={(e) => handleTenantSwitch(e.target.value)}
-              className="bg-transparent text-white font-bold text-xs outline-none cursor-pointer"
-            >
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id} className="bg-slate-900 text-white">
-                  🏢 {t.name} ({t.currency})
-                </option>
-              ))}
-            </select>
+            <span className="text-white font-bold tracking-tight">
+              {activeTenant.name} ({activeTenant.currency})
+            </span>
           </div>
         )}
       </div>
