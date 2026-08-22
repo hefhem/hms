@@ -160,8 +160,10 @@ export const PlatformAdminView: React.FC = () => {
     }
   };
 
+  const isPlatformAdmin = user && (user.email === 'superadmin@platform.com' || !user.tenantId);
+
   // If user is not authenticated or not a Platform Admin, render Dedicated Platform Login
-  if (!user) {
+  if (!user || !isPlatformAdmin) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-6 text-slate-100">
         <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">

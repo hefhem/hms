@@ -28,8 +28,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('hms_token');
       localStorage.removeItem('hms_user');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      const isPlatform = window.location.pathname.startsWith('/platform');
+      if (!isPlatform && window.location.pathname !== '/login') {
+        window.location.href = '/';
       }
     }
     if (error.response?.status === 409) {
