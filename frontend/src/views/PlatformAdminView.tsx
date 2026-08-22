@@ -9,7 +9,6 @@ import {
   Lock,
   Edit2,
   Trash2,
-  Mail,
   Users,
   Server,
   AlertTriangle,
@@ -18,7 +17,6 @@ import {
   Key,
   ExternalLink,
   LogOut,
-  UserCheck,
   Check,
   RefreshCw,
 } from 'lucide-react';
@@ -42,6 +40,8 @@ export const PlatformAdminView: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [lockingTenant, setLockingTenant] = useState<any>(null);
   const [maintenanceTenant, setMaintenanceTenant] = useState<any>(null);
+  const [editingTenant, setEditingTenant] = useState<any>(null);
+  const [deletingTenant, setDeletingTenant] = useState<any>(null);
 
   // Platform SMTP State
   const [smtpConfig, setSmtpConfig] = useState({
@@ -197,7 +197,7 @@ export const PlatformAdminView: React.FC = () => {
         email: adminForm.email,
         password: adminForm.password || 'PlatformAdmin@123456',
         role: 'ADMIN',
-        tenantId: null, // Global Platform SuperAdmin Scope
+        tenantId: null,
         isActive: true,
       });
       showToast('success', 'Platform SuperAdmin Created', `Onboarded ${adminForm.fullName} (${adminForm.email})`);
@@ -260,7 +260,7 @@ export const PlatformAdminView: React.FC = () => {
     }
   };
 
-  // --- Tenant Handlers ---
+  // --- Subscriber Workspace Tenant CRUD Handlers ---
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -270,6 +270,39 @@ export const PlatformAdminView: React.FC = () => {
       fetchData();
     } catch (err: any) {
       showToast('error', 'Provisioning Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleEditTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTenant) return;
+    try {
+      await api.put(`/tenants/${editingTenant.id}`, {
+        name: editingTenant.name,
+        subdomain: editingTenant.subdomain,
+        currency: editingTenant.currency,
+        plan: editingTenant.plan,
+        maxUsers: parseInt(editingTenant.maxUsers) || 50,
+        contactEmail: editingTenant.contactEmail,
+        contactPhone: editingTenant.contactPhone,
+      });
+      showToast('success', 'Workspace Updated', `Saved changes for subscriber workspace '${editingTenant.name}'`);
+      setEditingTenant(null);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Workspace Update Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleDeleteTenant = async () => {
+    if (!deletingTenant) return;
+    try {
+      await api.delete(`/tenants/${deletingTenant.id}`);
+      showToast('success', 'Subscriber Workspace Deleted', `Removed hospital workspace '${deletingTenant.name}'`);
+      setDeletingTenant(null);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Workspace Deletion Failed', err.response?.data?.message || err.message);
     }
   };
 
@@ -321,7 +354,6 @@ export const PlatformAdminView: React.FC = () => {
 
   const isPlatformAdmin = user && (user.email === 'superadmin@platform.com' || !user.tenantId);
 
-  // Render Dedicated Platform Login if not authenticated as Platform SuperAdmin
   if (!user || !isPlatformAdmin) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-6 text-slate-100">
@@ -508,7 +540,7 @@ export const PlatformAdminView: React.FC = () => {
           />
         </div>
 
-        {/* Tab 1: Subscriber Workspaces */}
+        {/* Tab 1: Subscriber Workspaces Full CRUD */}
         {activeTab === 'subscribers' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {tenants.map((t) => (
@@ -534,20 +566,21 @@ export const PlatformAdminView: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-end gap-1">
-                    {t.isLocked ? (
-                      <span className="flex items-center gap-1 bg-rose-950 text-rose-400 border border-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                        <Lock className="w-3 h-3" /> LOCKED
-                      </span>
-                    ) : t.isMaintenanceMode ? (
-                      <span className="flex items-center gap-1 bg-amber-950 text-amber-400 border border-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                        <Wrench className="w-3 h-3" /> MAINTENANCE
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                        <Activity className="w-3 h-3" /> ACTIVE
-                      </span>
-                    )}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingTenant({ ...t })}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                      title="Edit Workspace Details"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setDeletingTenant(t)}
+                      className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
+                      title="Delete Tenant Workspace"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
@@ -586,7 +619,7 @@ export const PlatformAdminView: React.FC = () => {
                     }`}
                   >
                     <Lock className="w-3.5 h-3.5" />
-                    {t.isLocked ? 'Unlock Tenant' : 'Lock Tenant'}
+                    {t.isLocked ? 'Unlock Workspace' : 'Lock Workspace'}
                   </button>
 
                   <button
@@ -920,6 +953,155 @@ export const PlatformAdminView: React.FC = () => {
       </main>
 
       {/* --- MODALS --- */}
+
+      {/* Edit Subscriber Tenant Workspace Modal */}
+      {editingTenant && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-white text-base">Edit Subscriber Workspace Details</h3>
+              <button onClick={() => setEditingTenant(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditTenant} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Hospital / Clinic Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editingTenant.name}
+                  onChange={(e) => setEditingTenant({ ...editingTenant, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Subdomain Prefix</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingTenant.subdomain}
+                    onChange={(e) => setEditingTenant({ ...editingTenant, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Operating Currency</label>
+                  <select
+                    value={editingTenant.currency}
+                    onChange={(e) => setEditingTenant({ ...editingTenant, currency: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                  >
+                    <option value="NGN">NGN (₦ - Nigerian Naira)</option>
+                    <option value="USD">USD ($ - US Dollar)</option>
+                    <option value="EUR">EUR (€ - Euro)</option>
+                    <option value="GBP">GBP (£ - British Pound)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Subscription Plan</label>
+                  <select
+                    value={editingTenant.plan}
+                    onChange={(e) => setEditingTenant({ ...editingTenant, plan: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                  >
+                    <option value="STARTER">Starter Tier</option>
+                    <option value="PROFESSIONAL">Professional Tier</option>
+                    <option value="ENTERPRISE">Enterprise Tier</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Max User Quota</label>
+                  <input
+                    type="number"
+                    value={editingTenant.maxUsers}
+                    onChange={(e) => setEditingTenant({ ...editingTenant, maxUsers: parseInt(e.target.value) || 10 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Contact Email</label>
+                <input
+                  type="email"
+                  value={editingTenant.contactEmail || ''}
+                  onChange={(e) => setEditingTenant({ ...editingTenant, contactEmail: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Contact Phone</label>
+                <input
+                  type="text"
+                  value={editingTenant.contactPhone || ''}
+                  onChange={(e) => setEditingTenant({ ...editingTenant, contactPhone: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTenant(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-950"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Subscriber Tenant Modal */}
+      {deletingTenant && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-extrabold text-rose-400 text-base">Delete Subscriber Workspace</h3>
+              <button onClick={() => setDeletingTenant(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to permanently delete hospital workspace{' '}
+              <strong className="text-white">{deletingTenant.name}</strong> ({deletingTenant.subdomain}.clinic.com)?
+            </p>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingTenant(null)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteTenant}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-rose-950"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create SuperAdmin Modal */}
       {isCreateAdminModalOpen && (
