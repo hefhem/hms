@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
+import { Tenant } from '../tenants/entities/tenant.entity';
 import { UserRole } from '../../common/enums/role.enum';
 import { NotificationService } from '../notification/notification.service';
 import * as bcrypt from 'bcrypt';
@@ -11,6 +12,8 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(Tenant)
+    private tenantRepository: Repository<Tenant>,
     private notificationService: NotificationService,
   ) {}
 
@@ -18,6 +21,20 @@ export class UsersService {
     const existing = await this.usersRepository.findOne({ where: { email: data.email.toLowerCase() } });
     if (existing) {
       throw new ConflictException(`User with email ${data.email} already exists`);
+    }
+
+    // 🛡️ Subscription Staff User Quota Enforcement
+    if (data.tenantId) {
+      const tenant = await this.tenantRepository.findOne({ where: { id: data.tenantId } });
+      if (tenant) {
+        const currentStaffCount = await this.usersRepository.count({ where: { tenantId: data.tenantId } });
+        const maxLimit = tenant.maxUsers || 50;
+        if (currentStaffCount >= maxLimit) {
+          throw new ForbiddenException(
+            `Subscriber Staff User Quota Limit Exceeded: Workspace '${tenant.name}' has reached its maximum staff user limit of ${maxLimit} staff accounts under the ${tenant.plan} Subscription Plan Tier. Please upgrade your subscription tier to onboard additional staff members.`,
+          );
+        }
+      }
     }
 
     const rawPassword = data.password || 'Password@123';

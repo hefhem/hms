@@ -29,49 +29,64 @@ export class TenantsService implements OnModuleInit {
     await this.seedDefaultPlans();
   }
 
-  // --- Seed Default Subscription Plan Tiers ---
+  // --- Seed Default Subscription Plan Tiers (All Features Included, Limited by Quotas) ---
   async seedDefaultPlans() {
-    const count = await this.planRepository.count();
-    if (count === 0) {
-      const defaultPlans = [
-        {
-          code: 'STARTER',
-          name: 'Starter Tier Plan',
-          pricePerMonth: 99.0,
-          billingCycleDays: 30,
-          maxPatientsQuota: 200,
-          maxUsersQuota: 10,
-          features: ['EMR Clinical Notes', 'Appointments Scheduling', 'Basic Billing & Receipts'],
-          isActive: true,
-        },
-        {
-          code: 'PROFESSIONAL',
-          name: 'Professional Tier Plan',
-          pricePerMonth: 299.0,
-          billingCycleDays: 30,
-          maxPatientsQuota: 2000,
-          maxUsersQuota: 50,
-          features: ['EMR Clinical Notes', 'Appointments', 'Billing', 'Pharmacy & E-Prescribing', 'Laboratory Diagnostics'],
-          isActive: true,
-        },
-        {
-          code: 'ENTERPRISE',
-          name: 'Enterprise Care Tier Plan',
-          pricePerMonth: 799.0,
-          billingCycleDays: 30,
-          maxPatientsQuota: 10000,
-          maxUsersQuota: 500,
-          features: ['Full EMR Suite', 'Pharmacy', 'Lab', 'Radiology PACS', 'IPD Ward & Bed Allocation', 'HMO Insurance', 'MFA Security'],
-          isActive: true,
-        },
-      ];
+    const allFeatures = [
+      'EMR Clinical Notes & Consultations',
+      'Appointments Scheduling & Reminders',
+      'Billing Ledger & Invoicing',
+      'Pharmacy Inventory & E-Prescribing',
+      'Laboratory Diagnostics & Orders',
+      'Radiology PACS Imaging',
+      'IPD Ward & Bed Allocation',
+      'HMO Insurance Claims',
+      'MFA Security & Audit Logs',
+    ];
 
-      for (const p of defaultPlans) {
-        const plan = this.planRepository.create(p);
+    const defaultPlans = [
+      {
+        code: 'STARTER',
+        name: 'Starter Tier Plan',
+        pricePerMonth: 99.0,
+        billingCycleDays: 30,
+        maxPatientsQuota: 200,
+        maxUsersQuota: 10,
+        features: allFeatures,
+        isActive: true,
+      },
+      {
+        code: 'PROFESSIONAL',
+        name: 'Professional Tier Plan',
+        pricePerMonth: 299.0,
+        billingCycleDays: 30,
+        maxPatientsQuota: 2000,
+        maxUsersQuota: 50,
+        features: allFeatures,
+        isActive: true,
+      },
+      {
+        code: 'ENTERPRISE',
+        name: 'Enterprise Care Tier Plan',
+        pricePerMonth: 799.0,
+        billingCycleDays: 30,
+        maxPatientsQuota: 10000,
+        maxUsersQuota: 500,
+        features: allFeatures,
+        isActive: true,
+      },
+    ];
+
+    for (const p of defaultPlans) {
+      let plan = await this.planRepository.findOne({ where: { code: p.code } });
+      if (!plan) {
+        plan = this.planRepository.create(p);
+        await this.planRepository.save(plan);
+      } else {
+        plan.features = allFeatures;
         await this.planRepository.save(plan);
       }
-      this.logger.log('Seeded 3 baseline Subscription Plan Tiers (STARTER, PROFESSIONAL, ENTERPRISE)');
     }
+    this.logger.log('Verified Subscription Plan Tiers with All Features Enabled & Quota Enforcements');
   }
 
   // --- Subscription Plan Tier CRUD ---
@@ -216,6 +231,7 @@ export class TenantsService implements OnModuleInit {
             <p style="margin: 4px 0;"><strong>Admin Login Email:</strong> ${defaultEmail}</p>
             <p style="margin: 4px 0;"><strong>Temporary Password:</strong> ${tempPassword}</p>
             <p style="margin: 4px 0;"><strong>Subscription Tier:</strong> ${planCode} (${savedTenant.currency})</p>
+            <p style="margin: 4px 0;"><strong>Staff Account Quota:</strong> ${savedTenant.maxUsers} Staff Accounts</p>
             <p style="margin: 4px 0;"><strong>Patient Onboarding Quota:</strong> ${savedTenant.maxPatientsQuota} Patients</p>
             <p style="margin: 4px 0;"><strong>Subscription Expiry:</strong> ${endDate.toLocaleDateString()}</p>
           </div>
@@ -308,7 +324,7 @@ export class TenantsService implements OnModuleInit {
     tenant.plan = data.planCode as any;
     tenant.subscriptionEndDate = newEnd;
     tenant.subscriptionStatus = 'ACTIVE';
-    tenant.isLocked = false; // Unlock upon successful renewal
+    tenant.isLocked = false;
     if (plan) {
       tenant.maxPatientsQuota = plan.maxPatientsQuota;
       tenant.maxUsers = plan.maxUsersQuota;
@@ -346,6 +362,7 @@ export class TenantsService implements OnModuleInit {
             <p style="margin: 4px 0;"><strong>Amount Paid:</strong> ${tenant.currency} ${invoice.amount}</p>
             <p style="margin: 4px 0;"><strong>Billing Extension:</strong> ${billingDays} Days</p>
             <p style="margin: 4px 0;"><strong>New Expiry Date:</strong> ${newEnd.toLocaleDateString()}</p>
+            <p style="margin: 4px 0;"><strong>Staff Account Quota:</strong> ${tenant.maxUsers} Staff Accounts</p>
             <p style="margin: 4px 0;"><strong>Patient Onboarding Quota:</strong> ${tenant.maxPatientsQuota} Patients</p>
           </div>
 
