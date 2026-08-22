@@ -1366,11 +1366,14 @@ export const PlatformAdminView: React.FC = () => {
                   onChange={(e) => setRenewalForm({ ...renewalForm, planCode: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                 >
-                  {plans.map((p) => (
-                    <option key={p.id} value={p.code}>
-                      {p.name} (${p.pricePerMonth} - {p.maxPatientsQuota} Patients)
-                    </option>
-                  ))}
+                  {plans.map((p) => {
+                    const pSym = p.currency === 'NGN' ? '₦' : p.currency === 'EUR' ? '€' : p.currency === 'GBP' ? '£' : '$';
+                    return (
+                      <option key={p.id} value={p.code}>
+                        {p.name} ({pSym}{parseFloat(p.pricePerMonth).toLocaleString()} {p.currency || 'USD'} - {p.maxPatientsQuota} Patients)
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1748,11 +1751,14 @@ export const PlatformAdminView: React.FC = () => {
                     onChange={(e) => setEditingTenant({ ...editingTenant, plan: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                   >
-                    {plans.map((p) => (
-                      <option key={p.id} value={p.code}>
-                        {p.name} ({p.code})
-                      </option>
-                    ))}
+                    {plans.map((p) => {
+                      const pSym = p.currency === 'NGN' ? '₦' : p.currency === 'EUR' ? '€' : p.currency === 'GBP' ? '£' : '$';
+                      return (
+                        <option key={p.id} value={p.code}>
+                          {p.name} ({pSym}{parseFloat(p.pricePerMonth).toLocaleString()} {p.currency || 'USD'})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -1773,18 +1779,19 @@ export const PlatformAdminView: React.FC = () => {
                 const startDateObj = editingTenant.subscriptionStartDate ? new Date(editingTenant.subscriptionStartDate) : new Date();
                 const cycleDays = selPlan ? selPlan.billingCycleDays : 30;
                 const computedDue = new Date(startDateObj.getTime() + cycleDays * 24 * 60 * 60 * 1000).toLocaleDateString();
+                const planPriceFormatted = selPlan ? (selPlan.currency === 'NGN' ? '₦' : selPlan.currency === 'EUR' ? '€' : selPlan.currency === 'GBP' ? '£' : '$') + parseFloat(selPlan.pricePerMonth).toLocaleString() + ' ' + (selPlan.currency || 'USD') : 'Auto';
 
                 return (
                   <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-2xl space-y-1.5 text-xs font-mono">
                     <div className="flex justify-between text-cyan-400 font-bold text-[11px]">
-                      <span>⚡ Tier Quotas (Derived):</span>
+                      <span>⚡ Tier Quotas & Fee (Derived):</span>
                       <span>{selPlan ? selPlan.name : editingTenant.plan}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300">
+                      <div>• Tier Price: <strong className="text-emerald-400">{planPriceFormatted}</strong></div>
+                      <div>• Billing Cycle: <strong className="text-white">{cycleDays} Days</strong></div>
                       <div>• Patient Quota: <strong className="text-white">{selPlan ? selPlan.maxPatientsQuota : 'Auto'} Patients</strong></div>
                       <div>• Staff Quota: <strong className="text-white">{selPlan ? selPlan.maxUsersQuota : 'Auto'} Staff</strong></div>
-                      <div>• Billing Cycle: <strong className="text-white">{cycleDays} Days</strong></div>
-                      <div>• Calculated Due: <strong className="text-amber-400">{computedDue}</strong></div>
                     </div>
                   </div>
                 );
@@ -2120,11 +2127,14 @@ export const PlatformAdminView: React.FC = () => {
                     onChange={(e) => setCreateTenantForm({ ...createTenantForm, plan: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                   >
-                    {plans.map((p) => (
-                      <option key={p.id} value={p.code}>
-                        {p.name} ({p.code})
-                      </option>
-                    ))}
+                    {plans.map((p) => {
+                      const pSym = p.currency === 'NGN' ? '₦' : p.currency === 'EUR' ? '€' : p.currency === 'GBP' ? '£' : '$';
+                      return (
+                        <option key={p.id} value={p.code}>
+                          {p.name} ({pSym}{parseFloat(p.pricePerMonth).toLocaleString()} {p.currency || 'USD'})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -2145,18 +2155,19 @@ export const PlatformAdminView: React.FC = () => {
                 const startDateObj = createTenantForm.subscriptionStartDate ? new Date(createTenantForm.subscriptionStartDate) : new Date();
                 const cycleDays = selPlan ? selPlan.billingCycleDays : 30;
                 const computedDue = new Date(startDateObj.getTime() + cycleDays * 24 * 60 * 60 * 1000).toLocaleDateString();
+                const planPriceFormatted = selPlan ? (selPlan.currency === 'NGN' ? '₦' : selPlan.currency === 'EUR' ? '€' : selPlan.currency === 'GBP' ? '£' : '$') + parseFloat(selPlan.pricePerMonth).toLocaleString() + ' ' + (selPlan.currency || 'USD') : 'Auto';
 
                 return (
                   <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-2xl space-y-1.5 text-xs font-mono">
                     <div className="flex justify-between text-cyan-400 font-bold text-[11px]">
-                      <span>⚡ Tier Quotas & Billing (Auto-Derived):</span>
+                      <span>⚡ Tier Quotas & Fee (Auto-Derived):</span>
                       <span>{selPlan ? selPlan.name : createTenantForm.plan}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300">
+                      <div>• Tier Fee: <strong className="text-emerald-400">{planPriceFormatted}</strong></div>
+                      <div>• Billing Cycle: <strong className="text-white">{cycleDays} Days</strong></div>
                       <div>• Patient Quota: <strong className="text-white">{selPlan ? selPlan.maxPatientsQuota : 'Auto'} Patients</strong></div>
                       <div>• Staff Quota: <strong className="text-white">{selPlan ? selPlan.maxUsersQuota : 'Auto'} Staff</strong></div>
-                      <div>• Billing Cycle: <strong className="text-white">{cycleDays} Days</strong></div>
-                      <div>• Calculated Due: <strong className="text-amber-400">{computedDue}</strong></div>
                     </div>
                   </div>
                 );
