@@ -63,6 +63,12 @@ export class TenantsController {
     });
   }
 
+  @Post('invoices/:invoiceId/send-email')
+  @Roles(UserRole.ADMIN)
+  async sendInvoiceEmail(@Param('invoiceId') invoiceId: string) {
+    return this.tenantsService.sendInvoiceEmail(invoiceId);
+  }
+
   // --- Tenant Endpoints ---
   @Get()
   async getAllTenants() {

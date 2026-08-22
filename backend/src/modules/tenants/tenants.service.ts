@@ -449,6 +449,52 @@ export class TenantsService implements OnModuleInit {
     return { tenant: updatedTenant, invoice: savedInvoice };
   }
 
+  async sendInvoiceEmail(invoiceId: string): Promise<{ success: boolean; message: string }> {
+    const invoice = await this.invoiceRepository.findOne({ where: { id: invoiceId } });
+    if (!invoice) throw new NotFoundException('Subscription Invoice not found');
+
+    const tenant = await this.findOne(invoice.tenantId);
+    const targetEmail = tenant.contactEmail || `admin@${tenant.subdomain}.com`;
+
+    const currencySymbol = tenant.currency === 'NGN' ? '₦' : tenant.currency === 'EUR' ? '€' : tenant.currency === 'GBP' ? '£' : '$';
+    const formattedAmount = `${currencySymbol} ${parseFloat(invoice.amount.toString()).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+
+    const emailSubject = `🧾 Official Subscription Billing Statement & Invoice: ${invoice.invoiceNumber}`;
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 16px; border: 1px solid #334155;">
+        <div style="border-bottom: 1px solid #334155; padding-bottom: 16px; margin-bottom: 16px;">
+          <h2 style="color: #38bdf8; margin: 0;">ApexCare SaaS Platform</h2>
+          <p style="color: #94a3b8; font-size: 12px; margin: 4px 0 0 0;">Official Subscription Billing Statement & Payment Receipt</p>
+        </div>
+        
+        <p>Dear <strong>${tenant.name} Finance & Administration Team</strong>,</p>
+        <p>Please find below your official billing statement for subscription management services.</p>
+
+        <div style="background: #1e293b; padding: 18px; border-radius: 12px; border: 1px solid #334155; font-family: monospace; color: #e2e8f0; margin: 16px 0; line-height: 1.8;">
+          <p style="margin: 4px 0;"><strong>Invoice Reference:</strong> <span style="color: #38bdf8;">${invoice.invoiceNumber}</span></p>
+          <p style="margin: 4px 0;"><strong>Subscriber Workspace:</strong> ${tenant.name} (${tenant.subdomain}.clinic.com)</p>
+          <p style="margin: 4px 0;"><strong>Subscription Tier:</strong> ${invoice.planCode} Plan Tier</p>
+          <p style="margin: 4px 0;"><strong>Billing Duration:</strong> ${invoice.billingCycleDays} Days</p>
+          <p style="margin: 4px 0;"><strong>Operating Currency:</strong> ${tenant.currency}</p>
+          <p style="margin: 4px 0;"><strong>Total Amount:</strong> <span style="color: #4ade80; font-size: 16px; font-weight: bold;">${formattedAmount}</span></p>
+          <p style="margin: 4px 0;"><strong>Settlement Method:</strong> ${invoice.paymentMethod || 'PLATFORM_SUPERADMIN'}</p>
+          <p style="margin: 4px 0;"><strong>Billing Due Date:</strong> ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}</p>
+          <p style="margin: 4px 0;"><strong>Issue Date:</strong> ${new Date(invoice.createdAt).toLocaleDateString()}</p>
+        </div>
+
+        <p style="font-size: 13px; color: #cbd5e1;">Thank you for subscribing to the ApexCare Multi-Tenant Hospital & Clinic Management System.</p>
+        <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0;" />
+        <p style="font-size: 11px; color: #94a3b8;">ApexCare SaaS Platform Finance Operations &copy; 2026</p>
+      </div>
+    `;
+
+    await this.notificationService.sendEmail(targetEmail, emailSubject, '', emailHtml);
+    return {
+      success: true,
+      message: `Invoice ${invoice.invoiceNumber} successfully dispatched via email to ${targetEmail}`,
+    };
+  }
+
   async sendTestSmtp(id: string, recipientEmail: string): Promise<{ success: boolean; message: string }> {
     const tenant = await this.findOne(id);
     await this.notificationService.sendWelcomeEmail(

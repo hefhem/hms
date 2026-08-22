@@ -275,6 +275,15 @@ export const PlatformAdminView: React.FC = () => {
     }
   };
 
+  const handleSendInvoiceEmail = async (invoiceId: string, invoiceNum: string, tenantName: string) => {
+    try {
+      await api.post(`/tenants/invoices/${invoiceId}/send-email`);
+      showToast('success', 'Digital Invoice Dispatched via Email', `Sent official billing statement '${invoiceNum}' for ${tenantName}.`);
+    } catch (err: any) {
+      showToast('error', 'Invoice Email Failed', err.response?.data?.message || err.message);
+    }
+  };
+
   // --- Platform SMTP Handlers ---
   const handleSaveSmtpSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -968,22 +977,30 @@ export const PlatformAdminView: React.FC = () => {
                     <th className="py-3 px-4">Payment Method</th>
                     <th className="py-3 px-4">Issue Date</th>
                     <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Dispatch Statement</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-sans">
                   {invoices.map((inv) => {
                     const tenant = tenants.find((t) => t.id === inv.tenantId);
+                    const currCode = inv.currency || tenant?.currency || 'USD';
+                    const currSym = currCode === 'NGN' ? '₦' : currCode === 'EUR' ? '€' : currCode === 'GBP' ? '£' : '$';
+                    const formattedPrice = `${currSym} ${parseFloat(inv.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+
                     return (
                       <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors">
                         <td className="py-3.5 px-4 font-mono font-bold text-cyan-400">{inv.invoiceNumber}</td>
-                        <td className="py-3.5 px-4 font-bold text-white">{tenant ? tenant.name : inv.tenantId.slice(0, 8)}</td>
+                        <td className="py-3.5 px-4 font-bold text-white">
+                          {tenant ? tenant.name : inv.tenantId.slice(0, 8)}
+                          <span className="text-[10px] text-slate-400 font-mono block">({currCode})</span>
+                        </td>
                         <td className="py-3.5 px-4">
                           <span className="bg-cyan-950 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold">
                             {inv.planCode}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">
-                          {inv.currency || 'USD'} ${inv.amount}
+                          {formattedPrice}
                         </td>
                         <td className="py-3.5 px-4 font-mono text-slate-400 text-[11px]">{inv.paymentMethod}</td>
                         <td className="py-3.5 px-4 font-mono text-slate-400">{new Date(inv.createdAt).toLocaleDateString()}</td>
@@ -991,6 +1008,15 @@ export const PlatformAdminView: React.FC = () => {
                           <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-0.5 rounded-md text-[10px] font-bold">
                             ✓ PAID
                           </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            onClick={() => handleSendInvoiceEmail(inv.id, inv.invoiceNumber, tenant?.name || 'Hospital')}
+                            className="px-3 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-400 border border-cyan-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ml-auto shadow-md"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            Email Statement
+                          </button>
                         </td>
                       </tr>
                     );
