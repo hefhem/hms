@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -12,7 +12,6 @@ export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN)
   async getAllTenants() {
     return this.tenantsService.findAll();
   }
@@ -53,5 +52,12 @@ export class TenantsController {
   @Roles(UserRole.ADMIN)
   async toggleStatus(@Param('id') id: string, @Body() body: { status: TenantStatus }) {
     return this.tenantsService.toggleStatus(id, body.status);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  async deleteTenant(@Param('id') id: string) {
+    await this.tenantsService.delete(id);
+    return { success: true };
   }
 }

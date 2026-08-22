@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ShieldAlert, LogOut, Sparkles, Globe, KeyRound, Bell, Check, Clock, X } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, LogOut, Sparkles, Globe, KeyRound, Bell, Check, Clock, X, Building2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import api from '../../services/api';
@@ -12,18 +12,43 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onOpenMfa, onOpenCurrency, onOpenChangePassword }) => {
   const { user, logout } = useAuth();
-  const { currencySymbol, currencyCode } = useSettings();
+  const { currencySymbol, currencyCode, updateCurrency } = useSettings();
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string>('');
 
   useEffect(() => {
     if (user) {
       fetchNotifications();
-      const interval = setInterval(fetchNotifications, 10000); // poll notifications every 10s
+      fetchTenants();
+      const interval = setInterval(fetchNotifications, 10000);
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  const fetchTenants = async () => {
+    try {
+      const res = await api.get('/tenants');
+      setTenants(res.data);
+      if (res.data.length > 0 && !selectedTenantId) {
+        setSelectedTenantId(res.data[0].id);
+      }
+    } catch (err) {
+      // silent catch
+    }
+  };
+
+  const handleTenantSwitch = (tenantId: string) => {
+    setSelectedTenantId(tenantId);
+    const tenant = tenants.find((t) => t.id === tenantId);
+    if (tenant && tenant.currency) {
+      const symbols: Record<string, string> = { USD: '$', NGN: '₦', EUR: '€', GBP: '£', CAD: '$' };
+      const sym = symbols[tenant.currency] || '$';
+      updateCurrency(tenant.currency, sym);
+    }
+  };
 
   const fetchNotifications = async () => {
     try {
@@ -65,12 +90,25 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMfa, onOpenCurrency, onOpe
   };
 
   return (
-    <header className="h-16 bg-slate-900/80 border-b border-slate-800/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-[110]">
+    <header className="bg-slate-900/90 border-b border-slate-800 px-6 py-3.5 flex items-center justify-between sticky top-0 z-[110] backdrop-blur-md">
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 px-3 py-1 bg-cyan-950/50 border border-cyan-500/30 rounded-lg text-cyan-400 text-xs font-semibold">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>HMS Enterprise Care v1.0</span>
-        </div>
+        {/* Workspace Switcher Selector */}
+        {tenants.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-purple-950/40 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300">
+            <Building2 className="w-4 h-4 text-purple-400 shrink-0" />
+            <select
+              value={selectedTenantId}
+              onChange={(e) => handleTenantSwitch(e.target.value)}
+              className="bg-transparent text-white font-bold text-xs outline-none cursor-pointer"
+            >
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id} className="bg-slate-900 text-white">
+                  🏢 {t.name} ({t.currency})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
@@ -128,13 +166,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMfa, onOpenCurrency, onOpe
                         !n.isRead ? 'bg-cyan-950/40 border border-cyan-500/20' : 'hover:bg-slate-800/40'
                       }`}
                     >
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-white leading-tight">{n.title}</span>
-                        <span className="text-[10px] text-slate-500 font-mono">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-white">{n.title}</span>
+                        <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-cyan-400" />
                           {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-300 leading-relaxed">{n.message}</p>
+                      <p className="text-xs text-slate-300 leading-relaxed font-sans">{n.message}</p>
                     </div>
                   ))
                 )}
@@ -143,65 +182,46 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMfa, onOpenCurrency, onOpe
           )}
         </div>
 
-        {/* Password Change Button */}
+        {/* Change Password Security Button */}
         <button
           onClick={onOpenChangePassword}
-          className="p-2 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded-xl transition-all border border-slate-800"
-          title="Change Password"
+          className="p-2 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-xl transition-all border border-slate-800"
+          title="Change Account Password"
         >
-          <KeyRound className="w-4 h-4 text-cyan-400" />
+          <KeyRound className="w-4 h-4" />
         </button>
 
-        {/* MFA Status Indicator */}
-        <button
-          onClick={onOpenMfa}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
-            user?.mfaEnabled
-              ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60'
-              : 'bg-amber-950/60 border-amber-500/40 text-amber-300 hover:bg-amber-900/60'
-          }`}
-          title={user?.mfaEnabled ? 'MFA Protection Active' : 'Click to setup 2FA MFA'}
-        >
-          {user?.mfaEnabled ? (
-            <>
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>MFA Secured</span>
-            </>
-          ) : (
-            <>
-              <ShieldAlert className="w-4 h-4 text-amber-400" />
-              <span>Enable MFA</span>
-            </>
-          )}
-        </button>
-
-        {/* User Badge */}
-        <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
-          <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-cyan-400 font-bold">
-            {user?.fullName?.charAt(0) || 'U'}
-          </div>
-          <div className="hidden sm:block text-left">
-            <div className="text-sm font-semibold text-white leading-tight">{user?.fullName}</div>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span
-                className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded border ${getRoleBadgeColor(
-                  user?.role || '',
-                )}`}
-              >
-                {user?.role}
-              </span>
+        {/* User Identity & Role Badge */}
+        {user && (
+          <div className="flex items-center gap-3 pl-4 border-l border-slate-800">
+            <div className="text-right hidden sm:block">
+              <span className="block text-xs font-bold text-white leading-tight">{user.fullName}</span>
+              <span className="text-[10px] text-cyan-400 font-mono">{user.email}</span>
             </div>
-          </div>
-        </div>
 
-        {/* Logout */}
-        <button
-          onClick={logout}
-          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 rounded-xl transition-all border border-transparent hover:border-rose-500/30"
-          title="Sign Out"
-        >
-          <LogOut className="w-5 h-5" />
-        </button>
+            <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold tracking-wider border uppercase ${getRoleBadgeColor(user.role)}`}>
+              {user.role}
+            </span>
+
+            {user.mfaEnabled ? (
+              <button onClick={onOpenMfa} title="MFA Security Active">
+                <ShieldCheck className="w-5 h-5 text-emerald-400 hover:text-emerald-300 transition-colors" />
+              </button>
+            ) : (
+              <button onClick={onOpenMfa} title="Enable MFA 2-Factor Security">
+                <ShieldAlert className="w-5 h-5 text-amber-400 hover:text-amber-300 transition-colors" />
+              </button>
+            )}
+
+            <button
+              onClick={logout}
+              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-xl transition-all border border-slate-800 ml-1"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

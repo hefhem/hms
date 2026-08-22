@@ -64,4 +64,8 @@ export class TenantsService {
     tenant.status = status;
     return await this.tenantRepository.save(tenant);
   }
+
+  async delete(id: string): Promise<void> {
+    await this.tenantRepository.delete(id);
+  }
 }
