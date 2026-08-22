@@ -14,7 +14,7 @@ export class UsersService {
     private notificationService: NotificationService,
   ) {}
 
-  async create(data: { email: string; password?: string; fullName: string; role?: UserRole }): Promise<User> {
+  async create(data: { email: string; password?: string; fullName: string; role?: UserRole; isActive?: boolean }): Promise<User> {
     const existing = await this.usersRepository.findOne({ where: { email: data.email } });
     if (existing) {
       throw new ConflictException(`User with email ${data.email} already exists`);
@@ -27,11 +27,12 @@ export class UsersService {
       password: hashedPassword,
       fullName: data.fullName,
       role: data.role || UserRole.DOCTOR,
+      isActive: data.isActive !== undefined ? data.isActive : true,
     });
 
     const saved = await this.usersRepository.save(user);
 
-    // Send Welcome Email via SMTP
+    // Dispatch SMTP Welcome Email
     await this.notificationService.sendWelcomeEmail(saved.email, saved.fullName, saved.role, rawPassword);
 
     return saved;
@@ -63,14 +64,44 @@ export class UsersService {
     });
   }
 
-  async updateProfile(userId: string, data: { fullName?: string; role?: UserRole }): Promise<User> {
+  async updateProfile(userId: string, data: { fullName?: string; email?: string; role?: UserRole; isActive?: boolean }): Promise<User> {
     const user = await this.findById(userId);
     if (!user) throw new NotFoundException('User not found');
 
-    if (data.fullName) user.fullName = data.fullName;
-    if (data.role) user.role = data.role;
+    if (data.fullName !== undefined) user.fullName = data.fullName;
+    if (data.email !== undefined) user.email = data.email;
+    if (data.role !== undefined) user.role = data.role;
+    if (data.isActive !== undefined) user.isActive = data.isActive;
 
     return await this.usersRepository.save(user);
+  }
+
+  async toggleStatus(id: string, isActive: boolean): Promise<User> {
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    user.isActive = isActive;
+    return await this.usersRepository.save(user);
+  }
+
+  async adminResetPassword(id: string, newPass: string): Promise<{ success: boolean; message: string }> {
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+
+    if (!newPass || newPass.length < 6) {
+      throw new BadRequestException('Password must be at least 6 characters long');
+    }
+
+    user.password = await bcrypt.hash(newPass, 10);
+    await this.usersRepository.save(user);
+
+    // Send SMTP notification with updated credentials
+    await this.notificationService.sendWelcomeEmail(user.email, user.fullName, user.role, newPass);
+
+    return { success: true, message: `Password for ${user.fullName} successfully updated and dispatched via SMTP.` };
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.usersRepository.delete(id);
   }
 
   async changePassword(userId: string, oldPass: string, newPass: string): Promise<{ success: boolean; message: string }> {

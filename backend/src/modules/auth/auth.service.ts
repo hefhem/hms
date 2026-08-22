@@ -35,6 +35,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email address or password');
     }
 
+    if (user.isActive === false) {
+      throw new UnauthorizedException('Account is inactive. Access disabled by System Administrator.');
+    }
+
     if (user.mfaEnabled) {
       const tempToken = this.jwtService.sign(
         { sub: user.id, email: user.email, isPendingMfa: true },
