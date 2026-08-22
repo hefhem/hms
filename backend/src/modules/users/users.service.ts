@@ -14,8 +14,8 @@ export class UsersService {
     private notificationService: NotificationService,
   ) {}
 
-  async create(data: { email: string; password?: string; fullName: string; role?: UserRole; isActive?: boolean }): Promise<User> {
-    const existing = await this.usersRepository.findOne({ where: { email: data.email } });
+  async create(data: { email: string; password?: string; fullName: string; role?: UserRole; tenantId?: string; isActive?: boolean }): Promise<User> {
+    const existing = await this.usersRepository.findOne({ where: { email: data.email.toLowerCase() } });
     if (existing) {
       throw new ConflictException(`User with email ${data.email} already exists`);
     }
@@ -23,7 +23,8 @@ export class UsersService {
     const rawPassword = data.password || 'Password@123';
     const hashedPassword = await bcrypt.hash(rawPassword, 10);
     const user = this.usersRepository.create({
-      email: data.email,
+      tenantId: data.tenantId,
+      email: data.email.toLowerCase(),
       password: hashedPassword,
       fullName: data.fullName,
       role: data.role || UserRole.DOCTOR,
@@ -49,12 +50,10 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return await this.usersRepository
-      .createQueryBuilder('user')
-      .addSelect('user.password')
-      .addSelect('user.mfaSecret')
-      .where('user.email = :email', { email })
-      .getOne();
+    if (!email) return null;
+    return await this.usersRepository.findOne({
+      where: { email: email.toLowerCase() },
+    });
   }
 
   async updateMfaSecret(userId: string, secret: string, enabled: boolean): Promise<void> {
@@ -69,7 +68,7 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
 
     if (data.fullName !== undefined) user.fullName = data.fullName;
-    if (data.email !== undefined) user.email = data.email;
+    if (data.email !== undefined) user.email = data.email.toLowerCase();
     if (data.role !== undefined) user.role = data.role;
     if (data.isActive !== undefined) user.isActive = data.isActive;
 

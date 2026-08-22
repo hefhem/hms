@@ -11,7 +11,7 @@ export enum BedStatus {
   VACANT = 'VACANT',
   OCCUPIED = 'OCCUPIED',
   CLEANING = 'CLEANING',
-  RESERVED = 'RESERVED',
+  MAINTENANCE = 'MAINTENANCE',
 }
 
 @Entity('beds')
@@ -19,16 +19,19 @@ export class Bed {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true })
+  tenantId: string;
+
   @Column({ unique: true })
-  bedNumber: string; // e.g. BED-101
+  bedNumber: string;
 
   @Column()
-  wardName: string; // e.g. 'General Male Ward', 'ICU', 'VIP Suite'
+  wardName: string;
 
   @Column({ default: 'GENERAL' })
-  bedClass: string; // 'GENERAL' | 'PRIVATE' | 'ICU' | 'ISOLATION'
+  bedClass: string;
 
-  @Column('float', { default: 120.0 })
+  @Column('float')
   pricePerNight: number;
 
   @Column({

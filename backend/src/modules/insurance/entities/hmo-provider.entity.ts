@@ -12,23 +12,23 @@ export class HmoProvider {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true })
+  tenantId: string;
+
   @Column({ unique: true })
-  code: string; // e.g. 'HMO-REL'
+  code: string;
 
   @Column()
-  name: string; // e.g. 'Reliance HMO'
+  name: string;
 
-  @Column({ nullable: true })
-  planType: string; // e.g. 'Comprehensive Corporate'
+  @Column({ default: 'Standard Corporate' })
+  planType: string;
 
   @Column({ nullable: true })
   contactEmail: string;
 
   @Column({ nullable: true })
   contactPhone: string;
-
-  @Column({ default: true })
-  isActive: boolean;
 
   @VersionColumn()
   version: number;

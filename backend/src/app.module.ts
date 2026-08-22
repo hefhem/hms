@@ -23,6 +23,7 @@ import { Admission } from './modules/ipd/entities/admission.entity';
 import { HmoClaim } from './modules/insurance/entities/hmo-claim.entity';
 import { HmoProvider } from './modules/insurance/entities/hmo-provider.entity';
 import { Tenant } from './modules/tenants/entities/tenant.entity';
+import { Notification } from './modules/notification/entities/notification.entity';
 
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -88,6 +89,7 @@ import { SeedService } from './database/seed.service';
           HmoClaim,
           HmoProvider,
           Tenant,
+          Notification,
         ];
 
         if (dbType === 'sqlite') {
@@ -126,6 +128,7 @@ import { SeedService } from './database/seed.service';
       HmoClaim,
       HmoProvider,
       Tenant,
+      Notification,
     ]),
 
     NotificationModule,

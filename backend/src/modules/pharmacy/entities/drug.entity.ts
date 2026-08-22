@@ -14,14 +14,17 @@ export class Drug {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true })
+  tenantId: string;
+
   @Column({ unique: true })
-  code: string; // SKU code, e.g. DRUG-AMOX-500
+  code: string;
 
   @Column()
   name: string;
 
   @Column()
-  category: string; // 'Antibiotics' | 'Analgesics' | 'Cardiovascular' | etc.
+  category: string;
 
   @Column('float')
   unitPrice: number;
@@ -33,13 +36,13 @@ export class Drug {
   reorderLevel: number;
 
   @Column({ default: 'Tablets' })
-  unit: string; // 'Tablets' | 'Capsules' | 'Syrup (ml)' | 'Vial' | 'Injection'
+  unit: string;
 
   @OneToMany(() => DrugBatch, (batch) => batch.drug, { cascade: true })
   batches: DrugBatch[];
 
   @VersionColumn()
-  version: number; // Concurrency Protection (Optimistic Lock)
+  version: number;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -8,8 +8,9 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() body: { email: string; pass: string }) {
-    return this.authService.login(body.email, body.pass);
+  async login(@Body() body: { email: string; password?: string; pass?: string }) {
+    const pass = body.password || body.pass || '';
+    return this.authService.login(body.email, pass);
   }
 
   @Post('mfa/verify-login')

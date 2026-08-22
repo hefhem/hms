@@ -45,9 +45,6 @@ export class SeedService implements OnApplicationBootstrap {
   }
 
   private async seedTenants() {
-    const count = await this.tenantRepository.count();
-    if (count > 0) return;
-
     this.logger.log('Seeding baseline Multi-Tenant Workspaces...');
     const demoTenants = [
       {
@@ -73,15 +70,14 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const t of demoTenants) {
-      await this.tenantRepository.save(this.tenantRepository.create(t));
+      const existing = await this.tenantRepository.findOne({ where: { subdomain: t.subdomain } });
+      if (!existing) {
+        await this.tenantRepository.save(this.tenantRepository.create(t));
+      }
     }
-    this.logger.log('Tenants seeded.');
   }
 
   private async seedUsers() {
-    const userCount = await this.userRepository.count();
-    if (userCount > 0) return;
-
     const tenants = await this.tenantRepository.find();
     const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
     const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
@@ -106,26 +102,28 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const u of usersData) {
-      const user = this.userRepository.create({
-        ...u,
-        password: defaultPassword,
-        mfaEnabled: false,
-        isActive: true,
-      });
-      await this.userRepository.save(user);
+      let existing = await this.userRepository.findOne({ where: { email: u.email } });
+      if (!existing) {
+        existing = this.userRepository.create({
+          ...u,
+          password: defaultPassword,
+          mfaEnabled: false,
+          isActive: true,
+        });
+      } else {
+        existing.password = defaultPassword;
+        existing.tenantId = u.tenantId;
+        existing.isActive = true;
+      }
+      await this.userRepository.save(existing);
     }
-    this.logger.log('Users successfully seeded for tenants.');
   }
 
   private async seedPatients() {
-    const patientCount = await this.patientRepository.count();
-    if (patientCount > 0) return;
-
     const tenants = await this.tenantRepository.find();
     const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
     const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
 
-    this.logger.log('Seeding sample patient records per Tenant...');
     const demoPatients = [
       {
         tenantId: apexId,
@@ -166,20 +164,21 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const p of demoPatients) {
-      await this.patientRepository.save(this.patientRepository.create(p));
+      const existing = await this.patientRepository.findOne({ where: { mrn: p.mrn } });
+      if (!existing) {
+        await this.patientRepository.save(this.patientRepository.create(p));
+      } else if (!existing.tenantId) {
+        existing.tenantId = p.tenantId;
+        await this.patientRepository.save(existing);
+      }
     }
-    this.logger.log('Patients seeded.');
   }
 
   private async seedPharmacy() {
-    const drugCount = await this.drugRepository.count();
-    if (drugCount > 0) return;
-
     const tenants = await this.tenantRepository.find();
     const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
     const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
 
-    this.logger.log('Seeding baseline drug inventory catalog per Tenant...');
     const demoDrugs = [
       {
         tenantId: apexId,
@@ -214,19 +213,16 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const d of demoDrugs) {
-      await this.drugRepository.save(this.drugRepository.create(d));
+      const existing = await this.drugRepository.findOne({ where: { code: d.code } });
+      if (!existing) {
+        await this.drugRepository.save(this.drugRepository.create(d));
+      }
     }
-    this.logger.log('Pharmacy catalog seeded.');
   }
 
   private async seedLab() {
-    const count = await this.labRepository.count();
-    if (count > 0) return;
-
     const patients = await this.patientRepository.find();
     if (patients.length === 0) return;
-
-    this.logger.log('Seeding baseline Laboratory Orders Queue...');
 
     const demoLabOrders = [
       {
@@ -245,20 +241,17 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const l of demoLabOrders) {
-      await this.labRepository.save(this.labRepository.create(l));
+      const existing = await this.labRepository.findOne({ where: { orderNumber: l.orderNumber } });
+      if (!existing) {
+        await this.labRepository.save(this.labRepository.create(l));
+      }
     }
-    this.logger.log('Laboratory orders seeded.');
   }
 
   private async seedServices() {
-    const count = await this.serviceRepository.count();
-    if (count > 0) return;
-
     const tenants = await this.tenantRepository.find();
     const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
     const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
-
-    this.logger.log('Seeding baseline Service Master per Tenant...');
 
     const demoServices = [
       { tenantId: apexId, code: 'SRV-CONS-GEN', name: 'General Doctor Consultation Fee', category: ServiceCategory.CONSULTATION, price: 50.0, taxRate: 0 },
@@ -267,19 +260,16 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const s of demoServices) {
-      await this.serviceRepository.save(this.serviceRepository.create(s));
+      const existing = await this.serviceRepository.findOne({ where: { code: s.code } });
+      if (!existing) {
+        await this.serviceRepository.save(this.serviceRepository.create(s));
+      }
     }
-    this.logger.log('Service Master Catalog seeded.');
   }
 
   private async seedRadiology() {
-    const count = await this.radRepository.count();
-    if (count > 0) return;
-
     const patients = await this.patientRepository.find();
     if (patients.length === 0) return;
-
-    this.logger.log('Seeding baseline Radiology (RIS) Orders...');
 
     const demoRad = [
       {
@@ -300,19 +290,17 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const r of demoRad) {
-      await this.radRepository.save(this.radRepository.create(r));
+      const existing = await this.radRepository.findOne({ where: { orderNumber: r.orderNumber } });
+      if (!existing) {
+        await this.radRepository.save(this.radRepository.create(r));
+      }
     }
   }
 
   private async seedBeds() {
-    const count = await this.bedRepository.count();
-    if (count > 0) return;
-
     const tenants = await this.tenantRepository.find();
     const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
     const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
-
-    this.logger.log('Seeding baseline IPD Bed Board per Tenant...');
 
     const demoBeds = [
       { tenantId: apexId, bedNumber: 'BED-101', wardName: 'General Male Ward', bedClass: 'GENERAL', pricePerNight: 80.0, status: BedStatus.VACANT },
@@ -320,19 +308,17 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const b of demoBeds) {
-      await this.bedRepository.save(this.bedRepository.create(b));
+      const existing = await this.bedRepository.findOne({ where: { bedNumber: b.bedNumber } });
+      if (!existing) {
+        await this.bedRepository.save(this.bedRepository.create(b));
+      }
     }
   }
 
   private async seedHmoProviders() {
-    const count = await this.hmoProviderRepository.count();
-    if (count > 0) return;
-
     const tenants = await this.tenantRepository.find();
     const apexId = tenants.find((t) => t.subdomain === 'apexcare')?.id;
     const stNichId = tenants.find((t) => t.subdomain === 'stnicholas')?.id;
-
-    this.logger.log('Seeding baseline HMO Providers Master per Tenant...');
 
     const demoProviders = [
       { tenantId: apexId, code: 'HMO-REL', name: 'Reliance HMO', planType: 'Comprehensive Corporate', contactEmail: 'claims@reliancehmo.com', contactPhone: '+1 (555) 019-2831' },
@@ -340,18 +326,16 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const p of demoProviders) {
-      await this.hmoProviderRepository.save(this.hmoProviderRepository.create(p));
+      const existing = await this.hmoProviderRepository.findOne({ where: { code: p.code } });
+      if (!existing) {
+        await this.hmoProviderRepository.save(this.hmoProviderRepository.create(p));
+      }
     }
   }
 
   private async seedInsurance() {
-    const count = await this.hmoClaimRepository.count();
-    if (count > 0) return;
-
     const patients = await this.patientRepository.find();
     if (patients.length === 0) return;
-
-    this.logger.log('Seeding baseline Insurance / HMO Claims...');
 
     const demoClaims = [
       {
@@ -369,7 +353,10 @@ export class SeedService implements OnApplicationBootstrap {
     ];
 
     for (const c of demoClaims) {
-      await this.hmoClaimRepository.save(this.hmoClaimRepository.create(c));
+      const existing = await this.hmoClaimRepository.findOne({ where: { claimNumber: c.claimNumber } });
+      if (!existing) {
+        await this.hmoClaimRepository.save(this.hmoClaimRepository.create(c));
+      }
     }
   }
 }

@@ -8,12 +8,12 @@ import {
 } from 'typeorm';
 
 export enum ServiceCategory {
-  CONSULTATION = 'Consultation',
-  LABORATORY = 'Laboratory',
-  RADIOLOGY = 'Radiology',
-  PROCEDURE = 'Procedure',
-  NURSING = 'Nursing Care',
-  ADMINISTRATIVE = 'Administrative',
+  CONSULTATION = 'CONSULTATION',
+  LABORATORY = 'LABORATORY',
+  RADIOLOGY = 'RADIOLOGY',
+  SURGERY = 'SURGERY',
+  NURSING = 'NURSING',
+  OTHER = 'OTHER',
 }
 
 @Entity('service_items')
@@ -21,26 +21,26 @@ export class ServiceItem {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true })
+  tenantId: string;
+
   @Column({ unique: true })
-  code: string; // e.g. SRV-CONS-01
+  code: string;
 
   @Column()
-  name: string; // e.g. General Doctor Consultation Fee
+  name: string;
 
   @Column({
     type: 'varchar',
     default: ServiceCategory.CONSULTATION,
   })
-  category: ServiceCategory | string;
+  category: ServiceCategory;
 
-  @Column('float', { default: 0.0 })
+  @Column('float')
   price: number;
 
-  @Column('float', { default: 0.0 })
-  taxRate: number; // percentage e.g. 5.0
-
-  @Column({ default: true })
-  isActive: boolean;
+  @Column('float', { default: 0 })
+  taxRate: number;
 
   @VersionColumn()
   version: number;
