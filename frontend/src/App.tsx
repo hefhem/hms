@@ -18,7 +18,6 @@ import { BillingView } from './views/BillingView';
 import { InsuranceView } from './views/InsuranceView';
 import { MasterDataView } from './views/MasterDataView';
 import { UsersManagementView } from './views/UsersManagementView';
-import { TenantManagementView } from './views/TenantManagementView';
 import { PlatformAdminView } from './views/PlatformAdminView';
 import { TenantSettingsView } from './views/TenantSettingsView';
 import { AuditView } from './views/AuditView';
@@ -35,6 +34,8 @@ const MainContent: React.FC = () => {
   const [isCurrencyModalOpen, setIsCurrencyModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
+  const isPlatformPath = window.location.pathname === '/platform' || window.location.pathname.startsWith('/platform');
+
   const handleNavigateToEmr = (patientId: string) => {
     setActiveEmrPatientId(patientId);
     setActiveTab('emr');
@@ -46,6 +47,11 @@ const MainContent: React.FC = () => {
         Initializing HMS Enterprise Care...
       </div>
     );
+  }
+
+  // Dedicated Standalone Platform Portal Route (/platform)
+  if (isPlatformPath) {
+    return <PlatformAdminView />;
   }
 
   if (!user) {
@@ -75,8 +81,6 @@ const MainContent: React.FC = () => {
           {activeTab === 'insurance' && <InsuranceView />}
           {activeTab === 'masterdata' && <MasterDataView />}
           {activeTab === 'users' && <UsersManagementView />}
-          {activeTab === 'tenants' && <TenantManagementView />}
-          {activeTab === 'platform' && <PlatformAdminView />}
           {activeTab === 'tenant-settings' && <TenantSettingsView />}
           {activeTab === 'audit' && <AuditView />}
         </main>

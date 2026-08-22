@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { HeartPulse, Lock, Mail, ShieldCheck, ArrowRight, Building2 } from 'lucide-react';
+import { HeartPulse, Lock, Mail, ShieldCheck, ArrowRight, Building2, Globe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -194,6 +194,16 @@ export const LoginView: React.FC = () => {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="mt-6 pt-4 text-center border-t border-slate-800/80">
+            <a
+              href="/platform"
+              className="text-xs text-cyan-400 hover:text-cyan-300 font-mono font-semibold transition-colors inline-flex items-center gap-1.5"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              Go to SaaS Platform SuperAdmin Portal (/platform) →
+            </a>
           </div>
         </div>
       </div>

@@ -86,6 +86,9 @@ export class SeedService implements OnApplicationBootstrap {
 
     const defaultPassword = await bcrypt.hash('Admin@123456', 10);
     const usersData = [
+      // SaaS Platform SuperAdmin (Global Scope / platform path)
+      { tenantId: null, email: 'superadmin@platform.com', fullName: 'Enterprise Platform SuperAdmin', role: UserRole.ADMIN },
+
       // ApexCare Staff
       { tenantId: apexId, email: 'admin@clinic.com', fullName: 'Dr. Sarah Connor (Chief Admin)', role: UserRole.ADMIN },
       { tenantId: apexId, email: 'doctor@clinic.com', fullName: 'Dr. Alexander Fleming (MD Internal)', role: UserRole.DOCTOR },

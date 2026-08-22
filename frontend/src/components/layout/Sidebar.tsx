@@ -17,10 +17,7 @@ import {
   UserCheck,
   ChevronDown,
   ChevronRight,
-  Globe,
-  Server,
   Settings,
-  Lock,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -38,8 +35,6 @@ export type TabType =
   | 'insurance'
   | 'masterdata'
   | 'users'
-  | 'tenants'
-  | 'platform'
   | 'tenant-settings'
   | 'audit';
 
@@ -53,7 +48,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
 
   // Collapsible Sub-Menu Section States
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    saas: true,
     clinical: true,
     diagnostics: true,
     pharmacy: true,
@@ -66,13 +60,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   };
 
   const navGroups = [
-    {
-      id: 'saas',
-      title: '🏢 Multi-Tenant SaaS Platform',
-      items: [
-        { id: 'platform', label: 'SaaS Platform Portal', icon: Building2, roles: ['ADMIN'] },
-      ],
-    },
     {
       id: 'clinical',
       title: 'Clinical Care',
@@ -187,7 +174,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       <div className="p-4 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
         <span className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          Multi-Tenant Engine
+          Hospital Workspace
         </span>
         <span className="text-slate-600">v2.3.0</span>
       </div>
