@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Database,
   Plus,
@@ -17,9 +17,10 @@ import {
   DollarSign,
   Layers,
   FileText,
-  Activity,
-  Tag,
-  Layers3,
+  Upload,
+  Download,
+  AlertTriangle,
+  FileSpreadsheet,
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -39,14 +40,23 @@ export const MasterDataView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('');
 
+  // Bulk Selection State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
   // Selected Item for Editing
   const [editingItem, setEditingItem] = useState<any>(null);
 
   // Modals Visibility
   const [isUniversalPriceModalOpen, setIsUniversalPriceModalOpen] = useState(false);
+  const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
   const [isHmoModalOpen, setIsHmoModalOpen] = useState(false);
   const [isBedModalOpen, setIsBedModalOpen] = useState(false);
   const [isDrugModalOpen, setIsDrugModalOpen] = useState(false);
+
+  // Bulk Upload File State
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [parsedCsvRows, setParsedCsvRows] = useState<any[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Universal Master Price List Form (Supports all Category Master Data)
   const [priceItemForm, setPriceItemForm] = useState({
@@ -99,6 +109,11 @@ export const MasterDataView: React.FC = () => {
     fetchData();
   }, []);
 
+  // Clear selections when tab changes
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [activeTab, selectedCategoryFilter, searchTerm]);
+
   const fetchData = async () => {
     try {
       const [sRes, hRes, bRes, dRes] = await Promise.all([
@@ -135,7 +150,139 @@ export const MasterDataView: React.FC = () => {
     }
   };
 
-  // --- HMO PROVIDERS CRUD ---
+  // --- BULK SELECTION & ACTIONS ---
+  const filteredServices = services.filter((s) => {
+    const matchesSearch =
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.department && s.department.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesCategory = selectedCategoryFilter ? s.category === selectedCategoryFilter : true;
+    return matchesCategory && matchesSearch;
+  });
+
+  const getCurrentDataset = () => {
+    if (activeTab === 'pricelist') return filteredServices;
+    if (activeTab === 'hmo') return hmoProviders;
+    if (activeTab === 'beds') return beds;
+    if (activeTab === 'drugs') return drugs;
+    return [];
+  };
+
+  const currentDataset = getCurrentDataset();
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(currentDataset.map((item) => item.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleToggleSelectRow = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Are you sure you want to BULK DELETE ${selectedIds.length} selected master records? This cannot be undone.`)) return;
+
+    try {
+      let endpoint = '/services';
+      if (activeTab === 'hmo') endpoint = '/insurance/providers';
+      if (activeTab === 'beds') endpoint = '/ipd/beds';
+      if (activeTab === 'drugs') endpoint = '/pharmacy/drugs';
+
+      await Promise.all(selectedIds.map((id) => api.delete(`${endpoint}/${id}`)));
+      showToast('success', 'Bulk Delete Completed', `Successfully removed ${selectedIds.length} master data items.`);
+      setSelectedIds([]);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Bulk Delete Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  // --- BULK CSV TEMPLATE GENERATION & DOWNLOAD ---
+  const handleDownloadCsvTemplate = () => {
+    const csvHeaders = 'code,name,category,department,price,specimenType,referenceRange,modality,bodyRegion,prepInstructions\n';
+    const sampleRow1 = 'LAB-CBC-99,Complete Blood Count (CBC Panel),LABORATORY,Hematology,45.0,Whole Blood (EDTA),WBC: 4.5-11.0,,\n';
+    const sampleRow2 = 'RAD-CXR-99,Chest X-Ray Digital PA View,RADIOLOGY,Diagnostic Radiology,85.0,,,X-RAY,Chest,Remove metal objects\n';
+    const sampleRow3 = 'SRV-CONS-99,Specialist Physician Consultation,CONSULTATION,Internal Medicine,120.0,,,,,\n';
+
+    const blob = new Blob([csvHeaders + sampleRow1 + sampleRow2 + sampleRow3], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Universal_Master_Price_List_Template.csv`;
+    link.click();
+    showToast('info', 'Template Downloaded', 'CSV Template downloaded with instructions and sample data.');
+  };
+
+  // --- BULK CSV FILE PARSING & IMPORT ---
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split(/\r\n|\n/).filter((line) => line.trim().length > 0);
+      if (lines.length <= 1) {
+        showToast('error', 'Empty File', 'Uploaded CSV has no data rows.');
+        return;
+      }
+
+      const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+      const rows = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map((v) => v.trim());
+        if (values.length < 2) continue;
+
+        const rowObj: any = {};
+        headers.forEach((header, index) => {
+          rowObj[header] = values[index] || '';
+        });
+
+        rows.push({
+          code: rowObj.code || `SRV-IMP-${100 + i}`,
+          name: rowObj.name || `Imported Service ${i}`,
+          category: (rowObj.category || 'CONSULTATION').toUpperCase(),
+          department: rowObj.department || 'General',
+          price: parseFloat(rowObj.price) || 50.0,
+          specimenType: rowObj.specimentype || rowObj.specimenType || '',
+          referenceRange: rowObj.referencerange || rowObj.referenceRange || '',
+          modality: (rowObj.modality || 'X-RAY').toUpperCase(),
+          bodyRegion: rowObj.bodyregion || rowObj.bodyRegion || '',
+          prepInstructions: rowObj.prepinstructions || rowObj.prepInstructions || '',
+          currency: currencyCode || 'USD',
+          isActive: true,
+        });
+      }
+
+      setParsedCsvRows(rows);
+    };
+
+    reader.readAsText(file);
+  };
+
+  const handleImportParsedRows = async () => {
+    if (parsedCsvRows.length === 0) return;
+    try {
+      await Promise.all(parsedCsvRows.map((row) => api.post('/services', row)));
+      showToast('success', 'Bulk Import Successful', `Successfully imported ${parsedCsvRows.length} master price items.`);
+      setIsBulkUploadModalOpen(false);
+      setCsvFile(null);
+      setParsedCsvRows([]);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Bulk Import Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  // --- HMO, BEDS & DRUGS SAVE HANDLERS ---
   const handleSaveHmo = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -154,7 +301,6 @@ export const MasterDataView: React.FC = () => {
     }
   };
 
-  // --- IPD BEDS CRUD ---
   const handleSaveBed = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -173,7 +319,6 @@ export const MasterDataView: React.FC = () => {
     }
   };
 
-  // --- PHARMACY DRUG FORMULARY CRUD ---
   const handleSaveDrug = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -206,17 +351,6 @@ export const MasterDataView: React.FC = () => {
     }
   };
 
-  // Filtered Services List (Single Source of Truth for Pricing & Master Catalogs)
-  const filteredServices = services.filter((s) => {
-    const matchesSearch =
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.department && s.department.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesCategory = selectedCategoryFilter ? s.category === selectedCategoryFilter : true;
-    return matchesCategory && matchesSearch;
-  });
-
   return (
     <div className="space-y-6">
       {/* View Header */}
@@ -230,37 +364,47 @@ export const MasterDataView: React.FC = () => {
               Universal Master Data & Price List
             </h1>
             <p className="text-xs text-slate-400">
-              Unified master data catalog for consultations, laboratory tests, radiology procedures, surgeries, beds, and pharmacy items.
+              Unified master catalog for consultations, lab tests, radiology procedures, surgeries, beds, and pharmacy items.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {activeTab === 'pricelist' && (
-            <button
-              onClick={() => {
-                setEditingItem(null);
-                setPriceItemForm({
-                  code: `SRV-00${services.length + 1}`,
-                  name: '',
-                  category: selectedCategoryFilter || 'CONSULTATION',
-                  department: 'General OPD',
-                  specimenType: 'Whole Blood (EDTA)',
-                  referenceRange: '',
-                  modality: 'X-RAY',
-                  bodyRegion: 'Chest',
-                  prepInstructions: '',
-                  price: 50.0,
-                  currency: currencyCode || 'USD',
-                  isActive: true,
-                });
-                setIsUniversalPriceModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add Item to Universal Price List
-            </button>
+            <>
+              <button
+                onClick={() => setIsBulkUploadModalOpen(true)}
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 text-xs font-bold rounded-xl transition-all shadow-md"
+              >
+                <Upload className="w-4 h-4" />
+                Bulk CSV Upload
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditingItem(null);
+                  setPriceItemForm({
+                    code: `SRV-00${services.length + 1}`,
+                    name: '',
+                    category: selectedCategoryFilter || 'CONSULTATION',
+                    department: 'General OPD',
+                    specimenType: 'Whole Blood (EDTA)',
+                    referenceRange: '',
+                    modality: 'X-RAY',
+                    bodyRegion: 'Chest',
+                    prepInstructions: '',
+                    price: 50.0,
+                    currency: currencyCode || 'USD',
+                    isActive: true,
+                  });
+                  setIsUniversalPriceModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Add Item to Price List
+              </button>
+            </>
           )}
 
           {activeTab === 'hmo' && (
@@ -396,7 +540,35 @@ export const MasterDataView: React.FC = () => {
         </div>
       )}
 
-      {/* UNIVERSAL MASTER PRICE LIST TABLE */}
+      {/* BULK SELECTION FLOATING TOOLBAR */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between bg-cyan-950 border border-cyan-500/40 p-4 rounded-2xl shadow-2xl animate-fade-in">
+          <div className="flex items-center gap-3">
+            <span className="w-3 h-3 rounded-full bg-cyan-400 animate-pulse"></span>
+            <span className="text-xs font-bold text-cyan-200">
+              {selectedIds.length} {selectedIds.length === 1 ? 'record' : 'records'} selected
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBulkDelete}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-rose-950 transition-all"
+            >
+              <Trash2 className="w-4 h-4" />
+              Bulk Delete Selected ({selectedIds.length})
+            </button>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl"
+            >
+              Deselect All
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STICKY HEADER FIXED DUAL-AXIS SCROLLABLE TABLE */}
       {activeTab === 'pricelist' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -411,96 +583,120 @@ export const MasterDataView: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono tracking-wider">
-                  <th className="py-3 px-4">Item Code</th>
-                  <th className="py-3 px-4">Service Description</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Department / Sub-Type</th>
-                  <th className="py-3 px-4">Specific Master Attributes</th>
-                  <th className="py-3 px-4">Master Price</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+          <div className="max-h-[550px] overflow-auto border border-slate-800 rounded-2xl relative shadow-inner custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse whitespace-nowrap">
+              <thead className="bg-slate-950 text-slate-400 uppercase font-mono text-[11px] tracking-wider sticky top-0 z-20 border-b border-slate-800 shadow-md">
+                <tr>
+                  <th className="p-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={currentDataset.length > 0 && selectedIds.length === currentDataset.length}
+                      onChange={handleSelectAll}
+                      className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 bg-slate-900"
+                    />
+                  </th>
+                  <th className="p-3 px-4">Item Code</th>
+                  <th className="p-3 px-4">Service Description</th>
+                  <th className="p-3 px-4">Category</th>
+                  <th className="p-3 px-4">Department / Sub-Type</th>
+                  <th className="p-3 px-4">Specific Master Attributes</th>
+                  <th className="p-3 px-4">Master Price</th>
+                  <th className="p-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-sans">
-                {filteredServices.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">{item.code}</td>
-                    <td className="py-3.5 px-4 font-bold text-white">{item.name}</td>
-                    <td className="py-3.5 px-4">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
-                          item.category === 'LABORATORY'
-                            ? 'bg-cyan-950 text-cyan-400 border border-cyan-800'
-                            : item.category === 'RADIOLOGY'
-                            ? 'bg-purple-950 text-purple-400 border border-purple-800'
-                            : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                        }`}
-                      >
-                        {item.category}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-300 font-mono">{item.department || 'General'}</td>
-                    <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]">
-                      {item.category === 'LABORATORY' && (
-                        <span>Specimen: <strong className="text-slate-200">{item.specimenType || 'Blood'}</strong> | Ref: {item.referenceRange || 'Standard'}</span>
-                      )}
-                      {item.category === 'RADIOLOGY' && (
-                        <span>Modality: <strong className="text-purple-300">{item.modality || 'X-Ray'}</strong> | Region: {item.bodyRegion || 'Chest'}</span>
-                      )}
-                      {item.category !== 'LABORATORY' && item.category !== 'RADIOLOGY' && (
-                        <span>{item.prepInstructions || 'Standard Care Service'}</span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">
-                      {formatCurrency(item.price)}
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingItem(item);
-                            setPriceItemForm({
-                              code: item.code,
-                              name: item.name,
-                              category: item.category || 'CONSULTATION',
-                              department: item.department || 'General OPD',
-                              specimenType: item.specimenType || 'Whole Blood (EDTA)',
-                              referenceRange: item.referenceRange || '',
-                              modality: item.modality || 'X-RAY',
-                              bodyRegion: item.bodyRegion || 'Chest',
-                              prepInstructions: item.prepInstructions || '',
-                              price: item.price,
-                              currency: item.currency || currencyCode || 'USD',
-                              isActive: item.isActive !== false,
-                            });
-                            setIsUniversalPriceModalOpen(true);
-                          }}
-                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
-                          title="Edit Universal Master Item"
+                {filteredServices.map((item) => {
+                  const isSelected = selectedIds.includes(item.id);
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`transition-colors ${
+                        isSelected ? 'bg-cyan-950/40 border-l-4 border-l-cyan-400' : 'hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <td className="p-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectRow(item.id)}
+                          className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 bg-slate-900"
+                        />
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-400">{item.code}</td>
+                      <td className="py-3 px-4 font-bold text-white">{item.name}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                            item.category === 'LABORATORY'
+                              ? 'bg-cyan-950 text-cyan-400 border border-cyan-800'
+                              : item.category === 'RADIOLOGY'
+                              ? 'bg-purple-950 text-purple-400 border border-purple-800'
+                              : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                          }`}
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem('service', item.id, item.name)}
-                          className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
-                          title="Delete Master Item"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {item.category}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-300 font-mono">{item.department || 'General'}</td>
+                      <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                        {item.category === 'LABORATORY' && (
+                          <span>Specimen: <strong className="text-slate-200">{item.specimenType || 'Blood'}</strong> | Ref: {item.referenceRange || 'Standard'}</span>
+                        )}
+                        {item.category === 'RADIOLOGY' && (
+                          <span>Modality: <strong className="text-purple-300">{item.modality || 'X-Ray'}</strong> | Region: {item.bodyRegion || 'Chest'}</span>
+                        )}
+                        {item.category !== 'LABORATORY' && item.category !== 'RADIOLOGY' && (
+                          <span>{item.prepInstructions || 'Standard Care Service'}</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-400">
+                        {formatCurrency(item.price)}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingItem(item);
+                              setPriceItemForm({
+                                code: item.code,
+                                name: item.name,
+                                category: item.category || 'CONSULTATION',
+                                department: item.department || 'General OPD',
+                                specimenType: item.specimenType || 'Whole Blood (EDTA)',
+                                referenceRange: item.referenceRange || '',
+                                modality: item.modality || 'X-RAY',
+                                bodyRegion: item.bodyRegion || 'Chest',
+                                prepInstructions: item.prepInstructions || '',
+                                price: item.price,
+                                currency: item.currency || currencyCode || 'USD',
+                                isActive: item.isActive !== false,
+                              });
+                              setIsUniversalPriceModalOpen(true);
+                            }}
+                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                            title="Edit Universal Master Item"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem('service', item.id, item.name)}
+                            className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
+                            title="Delete Master Item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* OTHER TABS: HMO, BEDS, DRUGS */}
+      {/* OTHER TABS: HMO, BEDS, DRUGS (FIXED STICKY HEADER TABLES) */}
       {activeTab === 'hmo' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -508,19 +704,25 @@ export const MasterDataView: React.FC = () => {
               <Shield className="w-5 h-5 text-blue-400" /> HMO Insurance Providers & Coverage Schemes
             </h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono tracking-wider">
-                  <th className="py-3 px-4">Provider Code</th>
-                  <th className="py-3 px-4">HMO Company Name</th>
-                  <th className="py-3 px-4">Coverage Plan Type</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+          <div className="max-h-[500px] overflow-auto border border-slate-800 rounded-2xl relative shadow-inner custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse whitespace-nowrap">
+              <thead className="bg-slate-950 text-slate-400 uppercase font-mono text-[11px] tracking-wider sticky top-0 z-20 border-b border-slate-800">
+                <tr>
+                  <th className="p-3 w-10 text-center">
+                    <input type="checkbox" checked={hmoProviders.length > 0 && selectedIds.length === hmoProviders.length} onChange={handleSelectAll} />
+                  </th>
+                  <th className="p-3 px-4">Provider Code</th>
+                  <th className="p-3 px-4">HMO Company Name</th>
+                  <th className="p-3 px-4">Coverage Plan Type</th>
+                  <th className="p-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-sans">
                 {hmoProviders.map((hmo) => (
                   <tr key={hmo.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="p-3 text-center">
+                      <input type="checkbox" checked={selectedIds.includes(hmo.id)} onChange={() => handleToggleSelectRow(hmo.id)} />
+                    </td>
                     <td className="py-3.5 px-4 font-mono font-bold text-blue-400">{hmo.code}</td>
                     <td className="py-3.5 px-4 font-bold text-white">{hmo.name}</td>
                     <td className="py-3.5 px-4 font-mono text-slate-300">{hmo.planType || 'Corporate'}</td>
@@ -556,20 +758,26 @@ export const MasterDataView: React.FC = () => {
               <Bed className="w-5 h-5 text-amber-400" /> Inpatient Ward Beds & Daily Rate Master
             </h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono tracking-wider">
-                  <th className="py-3 px-4">Bed #</th>
-                  <th className="py-3 px-4">Ward Name</th>
-                  <th className="py-3 px-4">Class</th>
-                  <th className="py-3 px-4">Price / Night</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+          <div className="max-h-[500px] overflow-auto border border-slate-800 rounded-2xl relative shadow-inner custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse whitespace-nowrap">
+              <thead className="bg-slate-950 text-slate-400 uppercase font-mono text-[11px] tracking-wider sticky top-0 z-20 border-b border-slate-800">
+                <tr>
+                  <th className="p-3 w-10 text-center">
+                    <input type="checkbox" checked={beds.length > 0 && selectedIds.length === beds.length} onChange={handleSelectAll} />
+                  </th>
+                  <th className="p-3 px-4">Bed #</th>
+                  <th className="p-3 px-4">Ward Name</th>
+                  <th className="p-3 px-4">Class</th>
+                  <th className="p-3 px-4">Price / Night</th>
+                  <th className="p-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-sans">
                 {beds.map((b) => (
                   <tr key={b.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="p-3 text-center">
+                      <input type="checkbox" checked={selectedIds.includes(b.id)} onChange={() => handleToggleSelectRow(b.id)} />
+                    </td>
                     <td className="py-3.5 px-4 font-mono font-bold text-amber-400">{b.bedNumber}</td>
                     <td className="py-3.5 px-4 font-bold text-white">{b.wardName}</td>
                     <td className="py-3.5 px-4 font-mono text-slate-300">{b.bedClass}</td>
@@ -606,21 +814,27 @@ export const MasterDataView: React.FC = () => {
               <Pill className="w-5 h-5 text-rose-400" /> Pharmacy Drug Formulary & Prices
             </h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono tracking-wider">
-                  <th className="py-3 px-4">Drug Code</th>
-                  <th className="py-3 px-4">Medication Name</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Stock Qty</th>
-                  <th className="py-3 px-4">Unit Price</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+          <div className="max-h-[500px] overflow-auto border border-slate-800 rounded-2xl relative shadow-inner custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse whitespace-nowrap">
+              <thead className="bg-slate-950 text-slate-400 uppercase font-mono text-[11px] tracking-wider sticky top-0 z-20 border-b border-slate-800">
+                <tr>
+                  <th className="p-3 w-10 text-center">
+                    <input type="checkbox" checked={drugs.length > 0 && selectedIds.length === drugs.length} onChange={handleSelectAll} />
+                  </th>
+                  <th className="p-3 px-4">Drug Code</th>
+                  <th className="p-3 px-4">Medication Name</th>
+                  <th className="p-3 px-4">Category</th>
+                  <th className="p-3 px-4">Stock Qty</th>
+                  <th className="p-3 px-4">Unit Price</th>
+                  <th className="p-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-sans">
                 {drugs.map((d) => (
                   <tr key={d.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="p-3 text-center">
+                      <input type="checkbox" checked={selectedIds.includes(d.id)} onChange={() => handleToggleSelectRow(d.id)} />
+                    </td>
                     <td className="py-3.5 px-4 font-mono font-bold text-rose-400">{d.code}</td>
                     <td className="py-3.5 px-4 font-bold text-white">{d.name}</td>
                     <td className="py-3.5 px-4 font-mono text-slate-300">{d.category}</td>
@@ -651,7 +865,116 @@ export const MasterDataView: React.FC = () => {
         </div>
       )}
 
-      {/* UNIVERSAL MASTER PRICE LIST ITEM MODAL (DYNAMIC CATEGORY MASTER FIELDS) */}
+      {/* BULK CSV UPLOAD MODAL WITH DOWNLOADABLE TEMPLATE & INSTRUCTIONS */}
+      {isBulkUploadModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-2xl w-full space-y-5 shadow-2xl relative">
+            <button onClick={() => setIsBulkUploadModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-950 text-cyan-400 flex items-center justify-center font-bold">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-white text-base">Bulk Master Data & Price List CSV Upload</h3>
+                <p className="text-xs text-slate-400">Batch import consultations, laboratory tests, radiology procedures, and price entries.</p>
+              </div>
+            </div>
+
+            {/* STEP 1: INSTRUCTIONS & DOWNLOAD TEMPLATE */}
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider font-mono flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4" /> Step 1: Instructions & Download CSV Template
+                </span>
+                <button
+                  onClick={handleDownloadCsvTemplate}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-md transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download Sample CSV Template
+                </button>
+              </div>
+
+              <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside font-sans">
+                <li>Download the sample CSV template above which contains valid headers and sample rows.</li>
+                <li>Supported Master Categories: <code className="text-cyan-400 font-mono">LABORATORY</code>, <code className="text-purple-400 font-mono">RADIOLOGY</code>, <code className="text-emerald-400 font-mono">CONSULTATION</code>, <code className="text-amber-400 font-mono">SURGERY</code>, <code className="text-blue-400 font-mono">NURSING</code>.</li>
+                <li>For Laboratory items, fill in <code className="text-cyan-400 font-mono">specimenType</code> and <code className="text-cyan-400 font-mono">referenceRange</code>.</li>
+                <li>For Radiology items, fill in <code className="text-purple-400 font-mono">modality</code> (X-RAY, ULTRASOUND, CT_SCAN, MRI) and <code className="text-purple-400 font-mono">bodyRegion</code>.</li>
+              </ul>
+            </div>
+
+            {/* STEP 2: FILE UPLOAD DROPZONE */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-300 uppercase">Step 2: Select Completed CSV File</label>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".csv"
+                onChange={handleFileChange}
+                className="block w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-cyan-400 hover:file:bg-slate-700 bg-slate-950 border border-slate-800 rounded-2xl cursor-pointer"
+              />
+            </div>
+
+            {/* STEP 3: PREVIEW PARSED ROWS */}
+            {parsedCsvRows.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                  <span>Parsed Data Preview ({parsedCsvRows.length} Rows Ready)</span>
+                  <span className="text-emerald-400 font-mono">● All columns validated</span>
+                </div>
+                <div className="max-h-48 overflow-auto border border-slate-800 rounded-2xl custom-scrollbar">
+                  <table className="w-full text-left text-xs border-collapse whitespace-nowrap">
+                    <thead className="bg-slate-950 text-slate-400 uppercase font-mono text-[10px] sticky top-0">
+                      <tr>
+                        <th className="p-2.5">Code</th>
+                        <th className="p-2.5">Name</th>
+                        <th className="p-2.5">Category</th>
+                        <th className="p-2.5">Price</th>
+                        <th className="p-2.5">Dept</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-mono">
+                      {parsedCsvRows.map((r, idx) => (
+                        <tr key={idx} className="hover:bg-slate-800/40">
+                          <td className="p-2.5 font-bold text-cyan-400">{r.code}</td>
+                          <td className="p-2.5 text-white">{r.name}</td>
+                          <td className="p-2.5 text-slate-300">{r.category}</td>
+                          <td className="p-2.5 text-emerald-400 font-bold">{formatCurrency(r.price)}</td>
+                          <td className="p-2.5 text-slate-400">{r.department}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBulkUploadModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={parsedCsvRows.length === 0}
+                onClick={handleImportParsedRows}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950 transition-all flex items-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Import {parsedCsvRows.length} Records Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* UNIVERSAL MASTER PRICE LIST ITEM MODAL */}
       {isUniversalPriceModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
