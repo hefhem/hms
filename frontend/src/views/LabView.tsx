@@ -32,15 +32,23 @@ export const LabView: React.FC = () => {
   ]);
   const [labNotes, setLabNotes] = useState('All cellular elements within normal clinical reference boundaries.');
 
+  const [labMasterCatalog, setLabMasterCatalog] = useState<any[]>([]);
+
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
     try {
-      const [orderRes, patRes] = await Promise.all([api.get('/lab/orders'), api.get('/patients')]);
+      const [orderRes, patRes, srvRes] = await Promise.all([
+        api.get('/lab/orders'),
+        api.get('/patients'),
+        api.get('/services'),
+      ]);
       setLabOrders(orderRes.data);
       setPatients(patRes.data);
+      const labItems = srvRes.data.filter((s: any) => s.category === 'LABORATORY');
+      setLabMasterCatalog(labItems);
       if (patRes.data.length > 0) {
         setOrderForm((prev) => ({ ...prev, patientId: patRes.data[0].id }));
       }
@@ -223,6 +231,24 @@ export const LabView: React.FC = () => {
               </div>
 
               <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Select from Master Laboratory Catalog</label>
+                <select
+                  onChange={(e) => {
+                    const sel = labMasterCatalog.find((m) => m.id === e.target.value);
+                    if (sel) {
+                      setOrderForm({ ...orderForm, testName: sel.name, specimenType: sel.specimenType || 'Venous Blood', cost: sel.price });
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white mb-2"
+                >
+                  <option value="">-- Choose Master Test Catalog Item --</option>
+                  {labMasterCatalog.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.code} - {m.name} ({formatCurrency(m.price)})
+                    </option>
+                  ))}
+                </select>
+
                 <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Lab Test Panel Name</label>
                 <input
                   type="text"
@@ -232,16 +258,16 @@ export const LabView: React.FC = () => {
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white mb-2"
                 />
                 <div className="flex flex-wrap gap-1.5">
-                  {commonTestPanels.map((p) => (
+                  {labMasterCatalog.map((p) => (
                     <button
-                      key={p.name}
+                      key={p.id}
                       type="button"
                       onClick={() =>
-                        setOrderForm({ ...orderForm, testName: p.name, specimenType: p.specimen, cost: p.cost })
+                        setOrderForm({ ...orderForm, testName: p.name, specimenType: p.specimenType || 'Venous Blood', cost: p.price })
                       }
-                      className="px-2 py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[10px] text-slate-300 rounded"
+                      className="px-2 py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[10px] text-cyan-400 font-mono rounded"
                     >
-                      + {p.name.split(' (')[0]}
+                      + {p.name.split(' (')[0]} ({formatCurrency(p.price)})
                     </button>
                   ))}
                 </div>

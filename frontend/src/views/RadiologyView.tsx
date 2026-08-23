@@ -27,15 +27,23 @@ export const RadiologyView: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [impression, setImpression] = useState('');
 
+  const [radMasterCatalog, setRadMasterCatalog] = useState<any[]>([]);
+
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
     try {
-      const [ordRes, patRes] = await Promise.all([api.get('/radiology/orders'), api.get('/patients')]);
+      const [ordRes, patRes, srvRes] = await Promise.all([
+        api.get('/radiology/orders'),
+        api.get('/patients'),
+        api.get('/services'),
+      ]);
       setOrders(ordRes.data);
       setPatients(patRes.data);
+      const radItems = srvRes.data.filter((s: any) => s.category === 'RADIOLOGY');
+      setRadMasterCatalog(radItems);
       if (patRes.data.length > 0) {
         setOrderForm((prev) => ({ ...prev, patientId: patRes.data[0].id }));
       }
@@ -192,6 +200,31 @@ export const RadiologyView: React.FC = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Select from Master Radiology Catalog</label>
+                <select
+                  onChange={(e) => {
+                    const sel = radMasterCatalog.find((m) => m.id === e.target.value);
+                    if (sel) {
+                      setOrderForm({
+                        ...orderForm,
+                        procedureName: sel.name,
+                        modality: sel.modality || 'X-Ray',
+                        cost: sel.price,
+                      });
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white mb-3"
+                >
+                  <option value="">-- Choose Master Radiology Procedure Item --</option>
+                  {radMasterCatalog.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.code} - {m.name} [{m.modality || 'X-Ray'}] ({formatCurrency(m.price)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Imaging Modality</label>
@@ -205,10 +238,11 @@ export const RadiologyView: React.FC = () => {
                     <option value="CT Scan">CT Scan</option>
                     <option value="MRI">MRI</option>
                     <option value="Mammography">Mammography</option>
+                    <option value="Echocardiogram">Echocardiogram</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Fee ({formatCurrency(orderForm.cost)})</label>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Procedure Fee ({formatCurrency(orderForm.cost)})</label>
                   <input
                     type="number"
                     value={orderForm.cost}
