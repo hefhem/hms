@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { PatientsService } from './patients.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -39,6 +39,12 @@ export class PatientsController {
     @Body() body: Partial<Patient> & { version?: number },
   ) {
     return this.patientsService.update(id, body);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  async deletePatient(@Param('id') id: string) {
+    return this.patientsService.delete(id);
   }
 
   @Post(':id/triage')

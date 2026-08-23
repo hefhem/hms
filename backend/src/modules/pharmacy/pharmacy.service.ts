@@ -45,6 +45,29 @@ export class PharmacyService {
   }
 
   async deleteDrug(id: string): Promise<void> {
+    const drug = await this.drugRepository.findOne({ where: { id } });
+    if (!drug) return;
+
+    let rxCount = 0;
+    let batchCount = 0;
+
+    try {
+      rxCount = await this.dataSource.getRepository('Prescription').count({
+        where: [{ drugName: drug.name }, { drugName: drug.code }],
+      });
+    } catch (e) {}
+
+    try {
+      batchCount = await this.batchRepository.count({ where: { drugId: id } });
+    } catch (e) {}
+
+    const totalUsage = rxCount + batchCount;
+    if (totalUsage > 0) {
+      throw new BadRequestException(
+        `Cannot delete Medication '${drug.name}' (${drug.code}) because it is actively referenced in ${totalUsage} prescription(s) or inventory batch(es).`,
+      );
+    }
+
     await this.drugRepository.delete(id);
   }
 

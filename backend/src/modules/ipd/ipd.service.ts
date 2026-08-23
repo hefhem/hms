@@ -52,9 +52,23 @@ export class IpdService {
 
   async deleteBed(id: string): Promise<void> {
     const bed = await this.bedRepository.findOne({ where: { id } });
-    if (bed && bed.status === BedStatus.OCCUPIED) {
-      throw new BadRequestException('Cannot delete bed while currently occupied');
+    if (!bed) return;
+
+    if (bed.status === BedStatus.OCCUPIED) {
+      throw new BadRequestException(`Cannot delete Ward Bed '${bed.bedNumber}' while currently OCCUPIED by an admitted patient.`);
     }
+
+    let admissionCount = 0;
+    try {
+      admissionCount = await this.admissionRepository.count({ where: { bedId: id } });
+    } catch (e) {}
+
+    if (admissionCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete Ward Bed '${bed.bedNumber}' because it is linked to ${admissionCount} historical admission record(s).`,
+      );
+    }
+
     await this.bedRepository.delete(id);
   }
 

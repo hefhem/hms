@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Triage } from './entities/triage.entity';
 import { TenantsService } from '../tenants/tenants.service';
@@ -14,6 +14,7 @@ export class PatientsService {
     @InjectRepository(Triage)
     private triageRepository: Repository<Triage>,
     private tenantsService: TenantsService,
+    private dataSource: DataSource,
   ) {}
 
   private async generateMrn(): Promise<string> {
@@ -85,6 +86,45 @@ export class PatientsService {
 
     Object.assign(patient, updateData);
     return await this.patientsRepository.save(patient);
+  }
+
+  async delete(id: string): Promise<void> {
+    const patient = await this.findOne(id);
+
+    let apptCount = 0;
+    let labCount = 0;
+    let radCount = 0;
+    let ipdCount = 0;
+    let invoiceCount = 0;
+
+    try {
+      apptCount = await this.dataSource.getRepository('Appointment').count({ where: { patientId: id } });
+    } catch (e) {}
+
+    try {
+      labCount = await this.dataSource.getRepository('LabOrder').count({ where: { patientId: id } });
+    } catch (e) {}
+
+    try {
+      radCount = await this.dataSource.getRepository('RadiologyOrder').count({ where: { patientId: id } });
+    } catch (e) {}
+
+    try {
+      ipdCount = await this.dataSource.getRepository('IpdAdmission').count({ where: { patientId: id } });
+    } catch (e) {}
+
+    try {
+      invoiceCount = await this.dataSource.getRepository('Invoice').count({ where: { patientId: id } });
+    } catch (e) {}
+
+    const totalUsage = apptCount + labCount + radCount + ipdCount + invoiceCount;
+    if (totalUsage > 0) {
+      throw new BadRequestException(
+        `Cannot delete Patient '${patient.fullName}' (${patient.mrn}) because they are actively referenced in ${totalUsage} clinical visit(s), lab/imaging order(s), admission(s), or billing record(s).`,
+      );
+    }
+
+    await this.patientsRepository.delete(id);
   }
 
   async recordTriage(patientId: string, triageData: Partial<Triage>): Promise<Triage> {

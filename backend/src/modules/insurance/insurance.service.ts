@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { HmoClaim, ClaimStatus } from './entities/hmo-claim.entity';
 import { HmoProvider } from './entities/hmo-provider.entity';
 import { PatientsService } from '../patients/patients.service';
@@ -14,6 +14,7 @@ export class InsuranceService {
     @InjectRepository(HmoProvider)
     private providerRepository: Repository<HmoProvider>,
     private patientsService: PatientsService,
+    private dataSource: DataSource,
   ) {}
 
   // HMO Providers CRUD
@@ -39,6 +40,29 @@ export class InsuranceService {
   }
 
   async deleteProvider(id: string): Promise<void> {
+    const provider = await this.providerRepository.findOne({ where: { id } });
+    if (!provider) return;
+
+    let patientCount = 0;
+    let claimCount = 0;
+
+    try {
+      patientCount = await this.dataSource
+        .getRepository('Patient')
+        .count({ where: [{ insuranceProviderId: id }, { insuranceProvider: provider.name }] });
+    } catch (e) {}
+
+    try {
+      claimCount = await this.claimRepository.count({ where: { hmoProvider: provider.name } });
+    } catch (e) {}
+
+    const totalUsage = patientCount + claimCount;
+    if (totalUsage > 0) {
+      throw new BadRequestException(
+        `Cannot delete HMO Provider '${provider.name}' because it is actively linked to ${totalUsage} patient policy or insurance claim record(s).`,
+      );
+    }
+
     await this.providerRepository.delete(id);
   }
 
