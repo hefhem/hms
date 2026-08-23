@@ -242,12 +242,14 @@ export const RadiologyView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Procedure Fee ({formatCurrency(orderForm.cost)})</label>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                    Procedure Fee <span className="text-[10px] text-purple-400 font-mono font-normal">(Derived from Universal Price List)</span>
+                  </label>
                   <input
                     type="number"
+                    readOnly
                     value={orderForm.cost}
-                    onChange={(e) => setOrderForm({ ...orderForm, cost: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white font-mono"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-emerald-400 font-mono font-bold cursor-not-allowed"
                   />
                 </div>
               </div>

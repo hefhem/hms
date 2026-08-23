@@ -18,6 +18,8 @@ import {
   Layers,
   FileText,
   Activity,
+  Tag,
+  Layers3,
 } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -25,30 +27,44 @@ import { useSettings } from '../context/SettingsContext';
 import { ExportOptions } from '../components/common/ExportOptions';
 
 export const MasterDataView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'lab_services' | 'radiology_services' | 'pricelist' | 'hmo' | 'beds' | 'drugs'>('lab_services');
+  const [activeTab, setActiveTab] = useState<'pricelist' | 'lab_services' | 'radiology_services' | 'hmo' | 'beds' | 'drugs'>('pricelist');
 
-  // Data Collections
+  // Data Collections (Single Source of Truth)
+  const [services, setServices] = useState<any[]>([]);
   const [hmoProviders, setHmoProviders] = useState<any[]>([]);
   const [beds, setBeds] = useState<any[]>([]);
-  const [services, setServices] = useState<any[]>([]);
   const [drugs, setDrugs] = useState<any[]>([]);
 
-  // Search & Filter
+  // Search & Category Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('');
 
   // Selected Item for Editing
   const [editingItem, setEditingItem] = useState<any>(null);
 
   // Modals Visibility
+  const [isUniversalPriceModalOpen, setIsUniversalPriceModalOpen] = useState(false);
   const [isHmoModalOpen, setIsHmoModalOpen] = useState(false);
   const [isBedModalOpen, setIsBedModalOpen] = useState(false);
-  const [isLabServiceModalOpen, setIsLabServiceModalOpen] = useState(false);
-  const [isRadServiceModalOpen, setIsRadServiceModalOpen] = useState(false);
-  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isDrugModalOpen, setIsDrugModalOpen] = useState(false);
 
-  // Forms State
+  // Universal Master Price List Form (Supports all Category Master Data)
+  const [priceItemForm, setPriceItemForm] = useState({
+    code: 'SRV-001',
+    name: '',
+    category: 'CONSULTATION',
+    department: 'General OPD',
+    specimenType: 'Whole Blood (EDTA)',
+    referenceRange: '',
+    modality: 'X-RAY',
+    bodyRegion: 'Chest',
+    prepInstructions: '',
+    price: 50.0,
+    currency: 'USD',
+    isActive: true,
+  });
+
+  // HMO Form
   const [hmoForm, setHmoForm] = useState({
     code: '',
     name: '',
@@ -57,6 +73,7 @@ export const MasterDataView: React.FC = () => {
     contactPhone: '',
   });
 
+  // Bed Form
   const [bedForm, setBedForm] = useState({
     bedNumber: '',
     wardName: 'General Male Ward',
@@ -64,38 +81,7 @@ export const MasterDataView: React.FC = () => {
     pricePerNight: 80.0,
   });
 
-  const [labServiceForm, setLabServiceForm] = useState({
-    code: 'LAB-TEST-01',
-    name: '',
-    category: 'LABORATORY',
-    department: 'Hematology',
-    specimenType: 'Whole Blood (EDTA)',
-    referenceRange: '4.5 - 11.0 x10^9/L',
-    price: 45.0,
-    currency: 'USD',
-  });
-
-  const [radServiceForm, setRadServiceForm] = useState({
-    code: 'RAD-PROC-01',
-    name: '',
-    category: 'RADIOLOGY',
-    department: 'Diagnostic Radiology',
-    modality: 'X-RAY',
-    bodyRegion: 'Chest',
-    prepInstructions: 'Remove metallic jewelry and accessories.',
-    price: 85.0,
-    currency: 'USD',
-  });
-
-  const [serviceForm, setServiceForm] = useState({
-    code: '',
-    name: '',
-    category: 'CONSULTATION',
-    department: 'General OPD',
-    price: 50.0,
-    currency: 'USD',
-  });
-
+  // Drug Form
   const [drugForm, setDrugForm] = useState({
     code: '',
     name: '',
@@ -115,18 +101,37 @@ export const MasterDataView: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [hRes, bRes, sRes, dRes] = await Promise.all([
+      const [sRes, hRes, bRes, dRes] = await Promise.all([
+        api.get('/services'),
         api.get('/insurance/providers'),
         api.get('/ipd/beds'),
-        api.get('/services'),
         api.get('/pharmacy/drugs'),
       ]);
+      setServices(sRes.data);
       setHmoProviders(hRes.data);
       setBeds(bRes.data);
-      setServices(sRes.data);
       setDrugs(dRes.data);
     } catch (err: any) {
-      showToast('error', 'Error Loading Master Data', err.message);
+      showToast('error', 'Error Loading Universal Price List Master Data', err.message);
+    }
+  };
+
+  // --- UNIVERSAL MASTER PRICE LIST & SERVICE CATALOG CRUD ---
+  const handleSaveUniversalPriceItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editingItem) {
+        await api.put(`/services/${editingItem.id}`, priceItemForm);
+        showToast('success', 'Universal Price List Updated', `Updated price & master data for '${priceItemForm.name}'.`);
+      } else {
+        await api.post('/services', priceItemForm);
+        showToast('success', 'Master Price Item Added', `Added '${priceItemForm.name}' to Universal Price List.`);
+      }
+      setIsUniversalPriceModalOpen(false);
+      setEditingItem(null);
+      fetchData();
+    } catch (err: any) {
+      showToast('error', 'Price Item Save Failed', err.response?.data?.message || err.message);
     }
   };
 
@@ -168,63 +173,6 @@ export const MasterDataView: React.FC = () => {
     }
   };
 
-  // --- LABORATORY SERVICE MASTER CRUD ---
-  const handleSaveLabService = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingItem) {
-        await api.put(`/services/${editingItem.id}`, { ...labServiceForm, category: 'LABORATORY' });
-        showToast('success', 'Lab Master Test Updated', `Updated ${labServiceForm.name}`);
-      } else {
-        await api.post('/services', { ...labServiceForm, category: 'LABORATORY' });
-        showToast('success', 'Lab Master Test Created', `Added ${labServiceForm.name} to Laboratory Master Catalog.`);
-      }
-      setIsLabServiceModalOpen(false);
-      setEditingItem(null);
-      fetchData();
-    } catch (err: any) {
-      showToast('error', 'Lab Test Save Failed', err.response?.data?.message || err.message);
-    }
-  };
-
-  // --- RADIOLOGY SERVICE MASTER CRUD ---
-  const handleSaveRadService = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingItem) {
-        await api.put(`/services/${editingItem.id}`, { ...radServiceForm, category: 'RADIOLOGY' });
-        showToast('success', 'Radiology Master Procedure Updated', `Updated ${radServiceForm.name}`);
-      } else {
-        await api.post('/services', { ...radServiceForm, category: 'RADIOLOGY' });
-        showToast('success', 'Radiology Procedure Created', `Added ${radServiceForm.name} to Radiology Master Catalog.`);
-      }
-      setIsRadServiceModalOpen(false);
-      setEditingItem(null);
-      fetchData();
-    } catch (err: any) {
-      showToast('error', 'Radiology Procedure Save Failed', err.response?.data?.message || err.message);
-    }
-  };
-
-  // --- GENERAL SERVICES & PRICE LIST CRUD ---
-  const handleSaveService = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingItem) {
-        await api.put(`/services/${editingItem.id}`, serviceForm);
-        showToast('success', 'Service Price List Updated', `Updated ${serviceForm.name}`);
-      } else {
-        await api.post('/services', serviceForm);
-        showToast('success', 'Service Item Created', `Added ${serviceForm.name} to Price List.`);
-      }
-      setIsServiceModalOpen(false);
-      setEditingItem(null);
-      fetchData();
-    } catch (err: any) {
-      showToast('error', 'Service Save Failed', err.response?.data?.message || err.message);
-    }
-  };
-
   // --- PHARMACY DRUG FORMULARY CRUD ---
   const handleSaveDrug = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,11 +193,11 @@ export const MasterDataView: React.FC = () => {
   };
 
   const handleDeleteItem = async (type: string, id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete '${name}' from Master Data?`)) return;
+    if (!confirm(`Are you sure you want to delete '${name}' from Universal Master Data?`)) return;
     try {
+      if (type === 'service') await api.delete(`/services/${id}`);
       if (type === 'hmo') await api.delete(`/insurance/providers/${id}`);
       if (type === 'bed') await api.delete(`/ipd/beds/${id}`);
-      if (type === 'service') await api.delete(`/services/${id}`);
       if (type === 'drug') await api.delete(`/pharmacy/drugs/${id}`);
       showToast('success', 'Master Item Deleted', `Removed ${name} from system master records.`);
       fetchData();
@@ -258,23 +206,21 @@ export const MasterDataView: React.FC = () => {
     }
   };
 
-  // Filtering for Lab Services, Rad Services & Central Price List
-  const labServicesList = services.filter((s) => s.category === 'LABORATORY' && (
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.department && s.department.toLowerCase().includes(searchTerm.toLowerCase()))
-  ));
+  // Filtered Services List (Single Source of Truth for Pricing & Master Catalogs)
+  const filteredServices = services.filter((s) => {
+    const matchesSearch =
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.department && s.department.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  const radServicesList = services.filter((s) => s.category === 'RADIOLOGY' && (
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.modality && s.modality.toLowerCase().includes(searchTerm.toLowerCase()))
-  ));
-
-  const masterPriceList = services.filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.code.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter ? s.category === categoryFilter : true;
-    return matchesSearch && matchesCategory;
+    if (activeTab === 'lab_services') {
+      return s.category === 'LABORATORY' && matchesSearch;
+    }
+    if (activeTab === 'radiology_services') {
+      return s.category === 'RADIOLOGY' && matchesSearch;
+    }
+    const matchesCategory = selectedCategoryFilter ? s.category === selectedCategoryFilter : true;
+    return matchesCategory && matchesSearch;
   });
 
   return (
@@ -283,135 +229,68 @@ export const MasterDataView: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-cyan-950 text-cyan-400 border border-cyan-500/30 flex items-center justify-center font-bold">
-            <Database className="w-6 h-6" />
+            <ReceiptText className="w-6 h-6" />
           </div>
           <div>
             <h1 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-              Hospital Master Data & Services Catalog
+              Universal Master Price List & Service Catalogs
             </h1>
             <p className="text-xs text-slate-400">
-              Centralized catalog management for Laboratory Tests, Radiology Procedures, Pharmacy Formulary, Ward Beds, and Price Lists.
+              Single Source of Truth for hospital fee management. Category selection dynamically populates laboratory tests, radiology imaging, consultations, and bed rates.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {activeTab === 'lab_services' && (
-            <button
-              onClick={() => {
-                setEditingItem(null);
-                setLabServiceForm({
-                  code: `LAB-TEST-0${services.filter((s) => s.category === 'LABORATORY').length + 1}`,
-                  name: '',
-                  category: 'LABORATORY',
-                  department: 'Hematology',
-                  specimenType: 'Whole Blood (EDTA)',
-                  referenceRange: '',
-                  price: 45.0,
-                  currency: currencyCode || 'USD',
-                });
-                setIsLabServiceModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-950 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add Laboratory Test Master
-            </button>
-          )}
-
-          {activeTab === 'radiology_services' && (
-            <button
-              onClick={() => {
-                setEditingItem(null);
-                setRadServiceForm({
-                  code: `RAD-PROC-0${services.filter((s) => s.category === 'RADIOLOGY').length + 1}`,
-                  name: '',
-                  category: 'RADIOLOGY',
-                  department: 'Diagnostic Radiology',
-                  modality: 'X-RAY',
-                  bodyRegion: 'Chest',
-                  prepInstructions: '',
-                  price: 85.0,
-                  currency: currencyCode || 'USD',
-                });
-                setIsRadServiceModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-purple-950 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add Radiology Procedure Master
-            </button>
-          )}
-
-          {activeTab === 'pricelist' && (
-            <button
-              onClick={() => {
-                setEditingItem(null);
-                setServiceForm({
-                  code: `SRV-GEN-0${services.length + 1}`,
-                  name: '',
-                  category: 'CONSULTATION',
-                  department: 'General OPD',
-                  price: 50.0,
-                  currency: currencyCode || 'USD',
-                });
-                setIsServiceModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add Price List Item
-            </button>
-          )}
-
-          {activeTab === 'hmo' && (
-            <button
-              onClick={() => {
-                setEditingItem(null);
-                setHmoForm({ code: `HMO-${hmoProviders.length + 1}`, name: '', planType: 'Comprehensive Corporate', contactEmail: '', contactPhone: '' });
-                setIsHmoModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-950 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add HMO Provider
-            </button>
-          )}
-
-          {activeTab === 'beds' && (
-            <button
-              onClick={() => {
-                setEditingItem(null);
-                setBedForm({ bedNumber: `BED-${beds.length + 101}`, wardName: 'General Male Ward', bedClass: 'GENERAL', pricePerNight: 80.0 });
-                setIsBedModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-amber-950 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add Ward Bed
-            </button>
-          )}
-
-          {activeTab === 'drugs' && (
-            <button
-              onClick={() => {
-                setEditingItem(null);
-                setDrugForm({ code: `MED-${drugs.length + 1}`, name: '', category: 'Antibiotics', unitPrice: 12.5, quantityInStock: 100, reorderLevel: 20, unit: 'Tablets' });
-                setIsDrugModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-rose-950 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add Drug Formulary
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setEditingItem(null);
+              setPriceItemForm({
+                code: `SRV-00${services.length + 1}`,
+                name: '',
+                category: activeTab === 'lab_services' ? 'LABORATORY' : activeTab === 'radiology_services' ? 'RADIOLOGY' : 'CONSULTATION',
+                department: activeTab === 'lab_services' ? 'Hematology' : activeTab === 'radiology_services' ? 'Diagnostic Radiology' : 'General OPD',
+                specimenType: 'Whole Blood (EDTA)',
+                referenceRange: '',
+                modality: 'X-RAY',
+                bodyRegion: 'Chest',
+                prepInstructions: '',
+                price: 50.0,
+                currency: currencyCode || 'USD',
+                isActive: true,
+              });
+              setIsUniversalPriceModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Item to Universal Price List
+          </button>
         </div>
       </div>
 
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-800 overflow-x-auto pb-2">
         <button
-          onClick={() => setActiveTab('lab_services')}
+          onClick={() => {
+            setActiveTab('pricelist');
+            setSelectedCategoryFilter('');
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'pricelist'
+              ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-950'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900'
+          }`}
+        >
+          <ReceiptText className="w-4 h-4" />
+          Universal Master Price List ({services.length})
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('lab_services');
+            setSelectedCategoryFilter('LABORATORY');
+          }}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'lab_services'
               ? 'bg-cyan-950 text-cyan-400 border border-cyan-500/30 shadow-lg shadow-cyan-950'
@@ -423,7 +302,10 @@ export const MasterDataView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('radiology_services')}
+          onClick={() => {
+            setActiveTab('radiology_services');
+            setSelectedCategoryFilter('RADIOLOGY');
+          }}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'radiology_services'
               ? 'bg-purple-950 text-purple-400 border border-purple-500/30 shadow-lg shadow-purple-950'
@@ -435,18 +317,6 @@ export const MasterDataView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('pricelist')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-            activeTab === 'pricelist'
-              ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-950'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <ReceiptText className="w-4 h-4" />
-          Universal Price List ({services.length})
-        </button>
-
-        <button
           onClick={() => setActiveTab('hmo')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'hmo'
@@ -455,7 +325,7 @@ export const MasterDataView: React.FC = () => {
           }`}
         >
           <Shield className="w-4 h-4" />
-          HMO Insurance ({hmoProviders.length})
+          HMO Insurance Providers ({hmoProviders.length})
         </button>
 
         <button
@@ -483,14 +353,14 @@ export const MasterDataView: React.FC = () => {
         </button>
       </div>
 
-      {/* Search & Filter Bar for Master Catalogs */}
-      {(activeTab === 'lab_services' || activeTab === 'radiology_services' || activeTab === 'pricelist') && (
+      {/* Search & Category Filter Header for Universal Price List */}
+      {(activeTab === 'pricelist' || activeTab === 'lab_services' || activeTab === 'radiology_services') && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900 p-4 rounded-2xl border border-slate-800">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
             <input
               type="text"
-              placeholder="Search catalog code, test name, modality, or department..."
+              placeholder="Search code, service name, modality, or department..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
@@ -499,11 +369,11 @@ export const MasterDataView: React.FC = () => {
 
           {activeTab === 'pricelist' && (
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-xs text-slate-400">Category Filter:</span>
+              <span className="text-xs text-slate-400 font-mono">Category Filter:</span>
               <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white"
+                value={selectedCategoryFilter}
+                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
               >
                 <option value="">All Categories</option>
                 <option value="CONSULTATION">Consultations</option>
@@ -516,178 +386,26 @@ export const MasterDataView: React.FC = () => {
             </div>
           )}
 
-          <ExportOptions data={activeTab === 'lab_services' ? labServicesList : activeTab === 'radiology_services' ? radServicesList : masterPriceList} filename={`${activeTab}_master_catalog`} />
+          <ExportOptions data={filteredServices} filename="universal_master_price_list" />
         </div>
       )}
 
-      {/* TAB 1: 🧪 LABORATORY SERVICES MASTER CATALOG */}
-      {activeTab === 'lab_services' && (
+      {/* UNIVERSAL MASTER PRICE LIST TABLE */}
+      {(activeTab === 'pricelist' || activeTab === 'lab_services' || activeTab === 'radiology_services') && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div>
               <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <TestTube className="w-5 h-5 text-cyan-400" /> Laboratory Tests & Diagnostics Master Catalog
+                <ReceiptText className="w-5 h-5 text-emerald-400" />
+                {activeTab === 'lab_services'
+                  ? 'Laboratory Master Services & Pricing'
+                  : activeTab === 'radiology_services'
+                  ? 'Radiology Master Procedures & Pricing'
+                  : 'Universal Hospital Master Price List (Single Source of Truth)'}
               </h3>
-              <p className="text-xs text-slate-400">Configure lab test codes, specimen requirements, clinical reference ranges, and test fees.</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono tracking-wider">
-                  <th className="py-3 px-4">Test Code</th>
-                  <th className="py-3 px-4">Laboratory Test Name</th>
-                  <th className="py-3 px-4">Sub-Department</th>
-                  <th className="py-3 px-4">Specimen Type</th>
-                  <th className="py-3 px-4">Clinical Reference Ranges</th>
-                  <th className="py-3 px-4">Standard Test Fee</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-sans">
-                {labServicesList.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-cyan-400">{item.code}</td>
-                    <td className="py-3.5 px-4 font-bold text-white">{item.name}</td>
-                    <td className="py-3.5 px-4">
-                      <span className="bg-cyan-950 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold">
-                        {item.department || 'Laboratory'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-300 font-mono">{item.specimenType || 'Venous Blood'}</td>
-                    <td className="py-3.5 px-4 text-slate-400 text-[11px] font-mono max-w-xs truncate">{item.referenceRange || 'Standard Range'}</td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">
-                      {formatCurrency(item.price)}
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingItem(item);
-                            setLabServiceForm({
-                              code: item.code,
-                              name: item.name,
-                              category: 'LABORATORY',
-                              department: item.department || 'Hematology',
-                              specimenType: item.specimenType || 'Whole Blood (EDTA)',
-                              referenceRange: item.referenceRange || '',
-                              price: item.price,
-                              currency: item.currency || currencyCode || 'USD',
-                            });
-                            setIsLabServiceModalOpen(true);
-                          }}
-                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
-                          title="Edit Master Test"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem('service', item.id, item.name)}
-                          className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
-                          title="Delete Master Test"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: ☢️ RADIOLOGY SERVICES MASTER CATALOG */}
-      {activeTab === 'radiology_services' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div>
-              <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <Film className="w-5 h-5 text-purple-400" /> Radiology & Imaging Procedures Master Catalog
-              </h3>
-              <p className="text-xs text-slate-400">Manage imaging procedure codes, modalities (X-Ray, Ultrasound, CT, MRI), body regions, patient preparation, and study fees.</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase font-mono tracking-wider">
-                  <th className="py-3 px-4">Procedure Code</th>
-                  <th className="py-3 px-4">Radiology Procedure Name</th>
-                  <th className="py-3 px-4">Modality</th>
-                  <th className="py-3 px-4">Target Body Region</th>
-                  <th className="py-3 px-4">Patient Preparation Notes</th>
-                  <th className="py-3 px-4">Procedure Fee</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-sans">
-                {radServicesList.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-purple-400">{item.code}</td>
-                    <td className="py-3.5 px-4 font-bold text-white">{item.name}</td>
-                    <td className="py-3.5 px-4">
-                      <span className="bg-purple-950 text-purple-400 border border-purple-500/30 px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold">
-                        {item.modality || 'X-RAY'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-300 font-mono">{item.bodyRegion || 'Chest'}</td>
-                    <td className="py-3.5 px-4 text-slate-400 text-[11px] font-mono max-w-xs truncate">{item.prepInstructions || 'Standard procedure'}</td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">
-                      {formatCurrency(item.price)}
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingItem(item);
-                            setRadServiceForm({
-                              code: item.code,
-                              name: item.name,
-                              category: 'RADIOLOGY',
-                              department: item.department || 'Diagnostic Radiology',
-                              modality: item.modality || 'X-RAY',
-                              bodyRegion: item.bodyRegion || 'Chest',
-                              prepInstructions: item.prepInstructions || '',
-                              price: item.price,
-                              currency: item.currency || currencyCode || 'USD',
-                            });
-                            setIsRadServiceModalOpen(true);
-                          }}
-                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
-                          title="Edit Procedure"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem('service', item.id, item.name)}
-                          className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
-                          title="Delete Procedure"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: 📋 UNIVERSAL MASTER PRICE LIST */}
-      {activeTab === 'pricelist' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div>
-              <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <ReceiptText className="w-5 h-5 text-emerald-400" /> Universal Hospital Services Master Price List
-              </h3>
-              <p className="text-xs text-slate-400">Centralized fee matrix for Consultations, Laboratory Tests, Radiology Procedures, Surgeries, and Nursing Care.</p>
+              <p className="text-xs text-slate-400">
+                All prices are centrally managed here and automatically derived across LIS, RIS/PACS, EMR Order Entry, and Patient Billing.
+              </p>
             </div>
           </div>
 
@@ -698,59 +416,75 @@ export const MasterDataView: React.FC = () => {
                   <th className="py-3 px-4">Item Code</th>
                   <th className="py-3 px-4">Service Description</th>
                   <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Department</th>
-                  <th className="py-3 px-4">Unit Price</th>
-                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Department / Sub-Type</th>
+                  <th className="py-3 px-4">Specific Master Attributes</th>
+                  <th className="py-3 px-4">Master Price</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-sans">
-                {masterPriceList.map((item) => (
+                {filteredServices.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
                     <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">{item.code}</td>
                     <td className="py-3.5 px-4 font-bold text-white">{item.name}</td>
                     <td className="py-3.5 px-4">
-                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
-                        item.category === 'LABORATORY'
-                          ? 'bg-cyan-950 text-cyan-400 border border-cyan-800'
-                          : item.category === 'RADIOLOGY'
-                          ? 'bg-purple-950 text-purple-400 border border-purple-800'
-                          : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                      }`}>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                          item.category === 'LABORATORY'
+                            ? 'bg-cyan-950 text-cyan-400 border border-cyan-800'
+                            : item.category === 'RADIOLOGY'
+                            ? 'bg-purple-950 text-purple-400 border border-purple-800'
+                            : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                        }`}
+                      >
                         {item.category}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-300 font-mono">{item.department || 'General'}</td>
+                    <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]">
+                      {item.category === 'LABORATORY' && (
+                        <span>Specimen: <strong className="text-slate-200">{item.specimenType || 'Blood'}</strong> | Ref: {item.referenceRange || 'Standard'}</span>
+                      )}
+                      {item.category === 'RADIOLOGY' && (
+                        <span>Modality: <strong className="text-purple-300">{item.modality || 'X-Ray'}</strong> | Region: {item.bodyRegion || 'Chest'}</span>
+                      )}
+                      {item.category !== 'LABORATORY' && item.category !== 'RADIOLOGY' && (
+                        <span>{item.prepInstructions || 'Standard Care Service'}</span>
+                      )}
+                    </td>
                     <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">
                       {formatCurrency(item.price)}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${item.isActive !== false ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400'}`}>
-                        {item.isActive !== false ? '● ACTIVE' : '○ INACTIVE'}
-                      </span>
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => {
                             setEditingItem(item);
-                            setServiceForm({
+                            setPriceItemForm({
                               code: item.code,
                               name: item.name,
                               category: item.category || 'CONSULTATION',
                               department: item.department || 'General OPD',
+                              specimenType: item.specimenType || 'Whole Blood (EDTA)',
+                              referenceRange: item.referenceRange || '',
+                              modality: item.modality || 'X-RAY',
+                              bodyRegion: item.bodyRegion || 'Chest',
+                              prepInstructions: item.prepInstructions || '',
                               price: item.price,
                               currency: item.currency || currencyCode || 'USD',
+                              isActive: item.isActive !== false,
                             });
-                            setIsServiceModalOpen(true);
+                            setIsUniversalPriceModalOpen(true);
                           }}
                           className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                          title="Edit Universal Master Item"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteItem('service', item.id, item.name)}
                           className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
+                          title="Delete Master Item"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -764,18 +498,14 @@ export const MasterDataView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: 🛡️ HMO INSURANCE PROVIDERS */}
+      {/* OTHER TABS: HMO, BEDS, DRUGS */}
       {activeTab === 'hmo' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div>
-              <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <Shield className="w-5 h-5 text-blue-400" /> HMO Insurance Providers & Coverage Schemes
-              </h3>
-              <p className="text-xs text-slate-400">Maintain corporate HMO insurance contracts, provider codes, and policy plans.</p>
-            </div>
+            <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+              <Shield className="w-5 h-5 text-blue-400" /> HMO Insurance Providers & Coverage Schemes
+            </h3>
           </div>
-
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -783,8 +513,6 @@ export const MasterDataView: React.FC = () => {
                   <th className="py-3 px-4">Provider Code</th>
                   <th className="py-3 px-4">HMO Company Name</th>
                   <th className="py-3 px-4">Coverage Plan Type</th>
-                  <th className="py-3 px-4">Contact Email</th>
-                  <th className="py-3 px-4">Contact Phone</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -794,8 +522,6 @@ export const MasterDataView: React.FC = () => {
                     <td className="py-3.5 px-4 font-mono font-bold text-blue-400">{hmo.code}</td>
                     <td className="py-3.5 px-4 font-bold text-white">{hmo.name}</td>
                     <td className="py-3.5 px-4 font-mono text-slate-300">{hmo.planType || 'Corporate'}</td>
-                    <td className="py-3.5 px-4 font-mono text-slate-400">{hmo.contactEmail || 'N/A'}</td>
-                    <td className="py-3.5 px-4 font-mono text-slate-400">{hmo.contactPhone || 'N/A'}</td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -808,10 +534,7 @@ export const MasterDataView: React.FC = () => {
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteItem('hmo', hmo.id, hmo.name)}
-                          className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
-                        >
+                        <button onClick={() => handleDeleteItem('hmo', hmo.id, hmo.name)} className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -824,18 +547,13 @@ export const MasterDataView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 5: 🛏️ IPD WARD BEDS & RATES */}
       {activeTab === 'beds' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div>
-              <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <Bed className="w-5 h-5 text-amber-400" /> Inpatient Ward Beds & Daily Rate Master
-              </h3>
-              <p className="text-xs text-slate-400">Configure bed numbers, ward classifications (VIP, General, ICU), and nightly rates.</p>
-            </div>
+            <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+              <Bed className="w-5 h-5 text-amber-400" /> Inpatient Ward Beds & Daily Rate Master
+            </h3>
           </div>
-
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -866,10 +584,7 @@ export const MasterDataView: React.FC = () => {
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteItem('bed', b.id, b.bedNumber)}
-                          className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
-                        >
+                        <button onClick={() => handleDeleteItem('bed', b.id, b.bedNumber)} className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -882,18 +597,13 @@ export const MasterDataView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 6: 💊 PHARMACY DRUG FORMULARY */}
       {activeTab === 'drugs' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div>
-              <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <Pill className="w-5 h-5 text-rose-400" /> Pharmacy Drug Formulary & Prices
-              </h3>
-              <p className="text-xs text-slate-400">Manage pharmaceutical inventory, unit prices, reorder thresholds, and drug stock master.</p>
-            </div>
+            <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+              <Pill className="w-5 h-5 text-rose-400" /> Pharmacy Drug Formulary & Prices
+            </h3>
           </div>
-
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -926,10 +636,7 @@ export const MasterDataView: React.FC = () => {
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteItem('drug', d.id, d.name)}
-                          className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors"
-                        >
+                        <button onClick={() => handleDeleteItem('drug', d.id, d.name)} className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-rose-400 rounded-lg transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -942,254 +649,27 @@ export const MasterDataView: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 1: LAB SERVICE MASTER MODAL */}
-      {isLabServiceModalOpen && (
+      {/* UNIVERSAL MASTER PRICE LIST ITEM MODAL (DYNAMIC CATEGORY MASTER FIELDS) */}
+      {isUniversalPriceModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <TestTube className="w-5 h-5 text-cyan-400" />
-                {editingItem ? 'Edit Laboratory Master Test' : 'Create Laboratory Master Test'}
+                <ReceiptText className="w-5 h-5 text-emerald-400" />
+                {editingItem ? 'Edit Universal Master Price Item' : 'Add Item to Universal Price List'}
               </h3>
-              <button onClick={() => setIsLabServiceModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsUniversalPriceModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveLabService} className="space-y-3">
+            <form onSubmit={handleSaveUniversalPriceItem} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Test Code</label>
-                  <input
-                    type="text"
-                    required
-                    value={labServiceForm.code}
-                    onChange={(e) => setLabServiceForm({ ...labServiceForm, code: e.target.value.toUpperCase() })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Sub-Department</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Hematology, Biochemistry"
-                    value={labServiceForm.department}
-                    onChange={(e) => setLabServiceForm({ ...labServiceForm, department: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Laboratory Test Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Complete Blood Count (CBC Panel)"
-                  value={labServiceForm.name}
-                  onChange={(e) => setLabServiceForm({ ...labServiceForm, name: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Specimen Type</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Whole Blood (EDTA)"
-                    value={labServiceForm.specimenType}
-                    onChange={(e) => setLabServiceForm({ ...labServiceForm, specimenType: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Test Fee / Cost</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={labServiceForm.price}
-                    onChange={(e) => setLabServiceForm({ ...labServiceForm, price: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Clinical Reference Ranges</label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. WBC: 4.5-11.0 x10^9/L, Hb: 12.0-17.5 g/dL"
-                  value={labServiceForm.referenceRange}
-                  onChange={(e) => setLabServiceForm({ ...labServiceForm, referenceRange: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsLabServiceModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-950"
-                >
-                  {editingItem ? 'Save Changes' : 'Add Lab Test'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: RADIOLOGY SERVICE MASTER MODAL */}
-      {isRadServiceModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <Film className="w-5 h-5 text-purple-400" />
-                {editingItem ? 'Edit Radiology Master Procedure' : 'Create Radiology Master Procedure'}
-              </h3>
-              <button onClick={() => setIsRadServiceModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveRadService} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Procedure Code</label>
-                  <input
-                    type="text"
-                    required
-                    value={radServiceForm.code}
-                    onChange={(e) => setRadServiceForm({ ...radServiceForm, code: e.target.value.toUpperCase() })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Modality</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Select Category</label>
                   <select
-                    value={radServiceForm.modality}
-                    onChange={(e) => setRadServiceForm({ ...radServiceForm, modality: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                  >
-                    <option value="X-RAY">X-Ray Digital</option>
-                    <option value="ULTRASOUND">Ultrasound Scan</option>
-                    <option value="CT_SCAN">CT Scan</option>
-                    <option value="MRI">MRI Scan</option>
-                    <option value="MAMMOGRAPHY">Mammography</option>
-                    <option value="ECHOCARDIOGRAM">Echocardiogram</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Procedure Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Chest X-Ray Digital View (PA)"
-                  value={radServiceForm.name}
-                  onChange={(e) => setRadServiceForm({ ...radServiceForm, name: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Target Body Region</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Chest, Abdomen, Brain"
-                    value={radServiceForm.bodyRegion}
-                    onChange={(e) => setRadServiceForm({ ...radServiceForm, bodyRegion: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Procedure Fee</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={radServiceForm.price}
-                    onChange={(e) => setRadServiceForm({ ...radServiceForm, price: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Patient Preparation Instructions</label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Fasting 6-8 hours, remove all metallic objects"
-                  value={radServiceForm.prepInstructions}
-                  onChange={(e) => setRadServiceForm({ ...radServiceForm, prepInstructions: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsRadServiceModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-purple-950"
-                >
-                  {editingItem ? 'Save Changes' : 'Add Procedure'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: CENTRAL PRICE LIST ITEM MODAL */}
-      {isServiceModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-extrabold text-white text-base">
-                {editingItem ? 'Edit Price List Item' : 'Add Price List Item'}
-              </h3>
-              <button onClick={() => setIsServiceModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveService} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Item Code</label>
-                  <input
-                    type="text"
-                    required
-                    value={serviceForm.code}
-                    onChange={(e) => setServiceForm({ ...serviceForm, code: e.target.value.toUpperCase() })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Category</label>
-                  <select
-                    value={serviceForm.category}
-                    onChange={(e) => setServiceForm({ ...serviceForm, category: e.target.value })}
+                    value={priceItemForm.category}
+                    onChange={(e) => setPriceItemForm({ ...priceItemForm, category: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                   >
                     <option value="CONSULTATION">Consultation</option>
@@ -1197,39 +677,138 @@ export const MasterDataView: React.FC = () => {
                     <option value="RADIOLOGY">Radiology Imaging</option>
                     <option value="SURGERY">Surgical Operation</option>
                     <option value="NURSING">Nursing Care</option>
-                    <option value="OTHER">Other Service</option>
+                    <option value="OTHER">Other Hospital Service</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Item Code</label>
+                  <input
+                    type="text"
+                    required
+                    value={priceItemForm.code}
+                    onChange={(e) => setPriceItemForm({ ...priceItemForm, code: e.target.value.toUpperCase() })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono uppercase"
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Service Description</label>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Service Description / Name</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. General Doctor Consultation"
-                  value={serviceForm.name}
-                  onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
+                  placeholder="e.g. Complete Blood Count (CBC Panel) or Chest X-Ray Digital"
+                  value={priceItemForm.name}
+                  onChange={(e) => setPriceItemForm({ ...priceItemForm, name: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Unit Price / Fee</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={serviceForm.price}
-                  onChange={(e) => setServiceForm({ ...serviceForm, price: parseFloat(e.target.value) || 0 })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Department / Specialty</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Hematology, Diagnostic Radiology, OPD"
+                    value={priceItemForm.department}
+                    onChange={(e) => setPriceItemForm({ ...priceItemForm, department: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Master Price / Fee</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={priceItemForm.price}
+                    onChange={(e) => setPriceItemForm({ ...priceItemForm, price: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold"
+                  />
+                </div>
               </div>
+
+              {/* DYNAMIC CATEGORY MASTER FIELDS */}
+              {priceItemForm.category === 'LABORATORY' && (
+                <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-2xl space-y-3">
+                  <div className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                    <TestTube className="w-4 h-4" /> Laboratory Master Data Details:
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-300 mb-1">Specimen Type</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Whole Blood (EDTA), Serum, Urine"
+                        value={priceItemForm.specimenType}
+                        onChange={(e) => setPriceItemForm({ ...priceItemForm, specimenType: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-300 mb-1">Clinical Reference Ranges</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. WBC: 4.5-11.0 x10^9/L, Hb: 12-17.5"
+                        value={priceItemForm.referenceRange}
+                        onChange={(e) => setPriceItemForm({ ...priceItemForm, referenceRange: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {priceItemForm.category === 'RADIOLOGY' && (
+                <div className="p-3 bg-purple-950/40 border border-purple-500/30 rounded-2xl space-y-3">
+                  <div className="text-xs font-bold text-purple-400 flex items-center gap-1.5">
+                    <Film className="w-4 h-4" /> Radiology Master Data Details:
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-300 mb-1">Imaging Modality</label>
+                      <select
+                        value={priceItemForm.modality}
+                        onChange={(e) => setPriceItemForm({ ...priceItemForm, modality: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white"
+                      >
+                        <option value="X-RAY">X-Ray Digital</option>
+                        <option value="ULTRASOUND">Ultrasound Scan</option>
+                        <option value="CT_SCAN">CT Scan</option>
+                        <option value="MRI">MRI Scan</option>
+                        <option value="MAMMOGRAPHY">Mammography</option>
+                        <option value="ECHOCARDIOGRAM">Echocardiogram</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-300 mb-1">Target Body Region</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Chest, Abdomen, Brain, Spine"
+                        value={priceItemForm.bodyRegion}
+                        onChange={(e) => setPriceItemForm({ ...priceItemForm, bodyRegion: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-300 mb-1">Patient Preparation Instructions</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Fasting 6-8 hours, full bladder required"
+                      value={priceItemForm.prepInstructions}
+                      onChange={(e) => setPriceItemForm({ ...priceItemForm, prepInstructions: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setIsServiceModalOpen(false)}
+                  onClick={() => setIsUniversalPriceModalOpen(false)}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl"
                 >
                   Cancel
@@ -1238,7 +817,7 @@ export const MasterDataView: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950"
                 >
-                  {editingItem ? 'Save Price' : 'Add Item'}
+                  {editingItem ? 'Save Master Price & Data' : 'Add to Universal Price List'}
                 </button>
               </div>
             </form>

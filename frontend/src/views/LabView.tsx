@@ -285,13 +285,15 @@ export const LabView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Test Cost</label>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                    Test Fee <span className="text-[10px] text-cyan-400 font-mono font-normal">(Derived from Universal Price List)</span>
+                  </label>
                   <input
                     type="number"
                     required
+                    readOnly
                     value={orderForm.cost}
-                    onChange={(e) => setOrderForm({ ...orderForm, cost: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white font-mono"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-emerald-400 font-mono font-bold cursor-not-allowed"
                   />
                 </div>
               </div>
