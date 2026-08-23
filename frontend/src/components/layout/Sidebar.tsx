@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         isCollapsed ? 'w-20' : 'w-72'
       } bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transition-all duration-300 relative overflow-x-hidden select-none z-30`}
     >
-      <div className="p-3 overflow-y-auto overflow-x-hidden max-h-screen">
+      <div className="p-3 overflow-y-auto overflow-x-hidden max-h-screen custom-scrollbar">
         {/* Brand Header & Toggle Button */}
         {!isCollapsed ? (
           <div className="flex items-center justify-between mb-6 px-1">
