@@ -27,7 +27,7 @@ import { useSettings } from '../context/SettingsContext';
 import { ExportOptions } from '../components/common/ExportOptions';
 
 export const MasterDataView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'pricelist' | 'lab_services' | 'radiology_services' | 'hmo' | 'beds' | 'drugs'>('pricelist');
+  const [activeTab, setActiveTab] = useState<'pricelist' | 'hmo' | 'beds' | 'drugs'>('pricelist');
 
   // Data Collections (Single Source of Truth)
   const [services, setServices] = useState<any[]>([]);
@@ -213,12 +213,6 @@ export const MasterDataView: React.FC = () => {
       s.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.department && s.department.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    if (activeTab === 'lab_services') {
-      return s.category === 'LABORATORY' && matchesSearch;
-    }
-    if (activeTab === 'radiology_services') {
-      return s.category === 'RADIOLOGY' && matchesSearch;
-    }
     const matchesCategory = selectedCategoryFilter ? s.category === selectedCategoryFilter : true;
     return matchesCategory && matchesSearch;
   });
@@ -233,43 +227,87 @@ export const MasterDataView: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-              Universal Master Price List & Service Catalogs
+              Universal Master Data & Price List
             </h1>
             <p className="text-xs text-slate-400">
-              Single Source of Truth for hospital fee management. Category selection dynamically populates laboratory tests, radiology imaging, consultations, and bed rates.
+              Unified master data catalog for consultations, laboratory tests, radiology procedures, surgeries, beds, and pharmacy items.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setEditingItem(null);
-              setPriceItemForm({
-                code: `SRV-00${services.length + 1}`,
-                name: '',
-                category: activeTab === 'lab_services' ? 'LABORATORY' : activeTab === 'radiology_services' ? 'RADIOLOGY' : 'CONSULTATION',
-                department: activeTab === 'lab_services' ? 'Hematology' : activeTab === 'radiology_services' ? 'Diagnostic Radiology' : 'General OPD',
-                specimenType: 'Whole Blood (EDTA)',
-                referenceRange: '',
-                modality: 'X-RAY',
-                bodyRegion: 'Chest',
-                prepInstructions: '',
-                price: 50.0,
-                currency: currencyCode || 'USD',
-                isActive: true,
-              });
-              setIsUniversalPriceModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Add Item to Universal Price List
-          </button>
+          {activeTab === 'pricelist' && (
+            <button
+              onClick={() => {
+                setEditingItem(null);
+                setPriceItemForm({
+                  code: `SRV-00${services.length + 1}`,
+                  name: '',
+                  category: selectedCategoryFilter || 'CONSULTATION',
+                  department: 'General OPD',
+                  specimenType: 'Whole Blood (EDTA)',
+                  referenceRange: '',
+                  modality: 'X-RAY',
+                  bodyRegion: 'Chest',
+                  prepInstructions: '',
+                  price: 50.0,
+                  currency: currencyCode || 'USD',
+                  isActive: true,
+                });
+                setIsUniversalPriceModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Add Item to Universal Price List
+            </button>
+          )}
+
+          {activeTab === 'hmo' && (
+            <button
+              onClick={() => {
+                setEditingItem(null);
+                setHmoForm({ code: `HMO-${hmoProviders.length + 1}`, name: '', planType: 'Comprehensive Corporate', contactEmail: '', contactPhone: '' });
+                setIsHmoModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-950 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Add HMO Provider
+            </button>
+          )}
+
+          {activeTab === 'beds' && (
+            <button
+              onClick={() => {
+                setEditingItem(null);
+                setBedForm({ bedNumber: `BED-${beds.length + 101}`, wardName: 'General Male Ward', bedClass: 'GENERAL', pricePerNight: 80.0 });
+                setIsBedModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-amber-950 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Add Ward Bed
+            </button>
+          )}
+
+          {activeTab === 'drugs' && (
+            <button
+              onClick={() => {
+                setEditingItem(null);
+                setDrugForm({ code: `MED-${drugs.length + 1}`, name: '', category: 'Antibiotics', unitPrice: 12.5, quantityInStock: 100, reorderLevel: 20, unit: 'Tablets' });
+                setIsDrugModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-rose-950 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Add Drug Formulary
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Streamlined Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-800 overflow-x-auto pb-2">
         <button
           onClick={() => {
@@ -283,37 +321,7 @@ export const MasterDataView: React.FC = () => {
           }`}
         >
           <ReceiptText className="w-4 h-4" />
-          Universal Master Price List ({services.length})
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('lab_services');
-            setSelectedCategoryFilter('LABORATORY');
-          }}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-            activeTab === 'lab_services'
-              ? 'bg-cyan-950 text-cyan-400 border border-cyan-500/30 shadow-lg shadow-cyan-950'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <TestTube className="w-4 h-4" />
-          Laboratory Catalog ({services.filter((s) => s.category === 'LABORATORY').length})
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('radiology_services');
-            setSelectedCategoryFilter('RADIOLOGY');
-          }}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-            activeTab === 'radiology_services'
-              ? 'bg-purple-950 text-purple-400 border border-purple-500/30 shadow-lg shadow-purple-950'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900'
-          }`}
-        >
-          <Film className="w-4 h-4" />
-          Radiology Catalog ({services.filter((s) => s.category === 'RADIOLOGY').length})
+          Universal Master Data & Price List ({services.length})
         </button>
 
         <button
@@ -354,7 +362,7 @@ export const MasterDataView: React.FC = () => {
       </div>
 
       {/* Search & Category Filter Header for Universal Price List */}
-      {(activeTab === 'pricelist' || activeTab === 'lab_services' || activeTab === 'radiology_services') && (
+      {activeTab === 'pricelist' && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900 p-4 rounded-2xl border border-slate-800">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -367,41 +375,35 @@ export const MasterDataView: React.FC = () => {
             />
           </div>
 
-          {activeTab === 'pricelist' && (
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-xs text-slate-400 font-mono">Category Filter:</span>
-              <select
-                value={selectedCategoryFilter}
-                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
-              >
-                <option value="">All Categories</option>
-                <option value="CONSULTATION">Consultations</option>
-                <option value="LABORATORY">Laboratory Tests</option>
-                <option value="RADIOLOGY">Radiology Imaging</option>
-                <option value="SURGERY">Surgical Operations</option>
-                <option value="NURSING">Nursing Care</option>
-                <option value="OTHER">Other Services</option>
-              </select>
-            </div>
-          )}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-xs text-slate-400 font-mono">Category Filter:</span>
+            <select
+              value={selectedCategoryFilter}
+              onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
+            >
+              <option value="">All Master Categories</option>
+              <option value="CONSULTATION">Consultations</option>
+              <option value="LABORATORY">Laboratory Tests</option>
+              <option value="RADIOLOGY">Radiology Imaging</option>
+              <option value="SURGERY">Surgical Operations</option>
+              <option value="NURSING">Nursing Care</option>
+              <option value="OTHER">Other Services</option>
+            </select>
+          </div>
 
           <ExportOptions data={filteredServices} filename="universal_master_price_list" />
         </div>
       )}
 
       {/* UNIVERSAL MASTER PRICE LIST TABLE */}
-      {(activeTab === 'pricelist' || activeTab === 'lab_services' || activeTab === 'radiology_services') && (
+      {activeTab === 'pricelist' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div>
               <h3 className="font-extrabold text-white text-base flex items-center gap-2">
                 <ReceiptText className="w-5 h-5 text-emerald-400" />
-                {activeTab === 'lab_services'
-                  ? 'Laboratory Master Services & Pricing'
-                  : activeTab === 'radiology_services'
-                  ? 'Radiology Master Procedures & Pricing'
-                  : 'Universal Hospital Master Price List (Single Source of Truth)'}
+                Universal Hospital Master Price List (Single Source of Truth)
               </h3>
               <p className="text-xs text-slate-400">
                 All prices are centrally managed here and automatically derived across LIS, RIS/PACS, EMR Order Entry, and Patient Billing.
