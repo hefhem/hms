@@ -41,16 +41,20 @@ export const AppointmentsView: React.FC<AppointmentsViewProps> = ({ onNavigateTo
 
   const fetchData = async () => {
     try {
-      const [appRes, patRes, userRes] = await Promise.all([
+      const [appRes, patRes] = await Promise.all([
         api.get('/appointments'),
         api.get('/patients'),
-        api.get('/users'),
       ]);
       setAppointments(appRes.data);
       setPatients(patRes.data);
 
-      const docs = userRes.data.filter((u: any) => u.role === 'DOCTOR' || u.role === 'ADMIN');
-      setDoctors(docs);
+      try {
+        const userRes = await api.get('/users');
+        const docs = userRes.data.filter((u: any) => u.role === 'DOCTOR' || u.role === 'ADMIN');
+        setDoctors(docs);
+      } catch (err) {
+        // Fallback for staff directory lookup
+      }
 
       if (patRes.data.length > 0) {
         setFormData((prev) => ({ ...prev, patientId: patRes.data[0].id }));
