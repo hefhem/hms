@@ -42,7 +42,44 @@ export const PlatformAdminView: React.FC = () => {
   const [loginPassword, setLoginPassword] = useState('Admin@123456');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'subscribers' | 'plans' | 'invoices' | 'platform_users' | 'platform_smtp' | 'broadcasts'>('subscribers');
+  type PlatformTabType = 'subscribers' | 'plans' | 'invoices' | 'platform_users' | 'platform_smtp' | 'broadcasts';
+
+  const platformTabToPath: Record<PlatformTabType, string> = {
+    subscribers: '/platform/subscribers',
+    plans: '/platform/plans',
+    invoices: '/platform/invoices',
+    platform_smtp: '/platform/smtp',
+    platform_users: '/platform/users',
+    broadcasts: '/platform/broadcasts',
+  };
+
+  const getPlatformTabFromPath = (pathname: string): PlatformTabType => {
+    const cleanPath = pathname.toLowerCase().replace(/\/$/, '');
+    if (cleanPath.endsWith('/plans')) return 'plans';
+    if (cleanPath.endsWith('/invoices')) return 'invoices';
+    if (cleanPath.endsWith('/smtp')) return 'platform_smtp';
+    if (cleanPath.endsWith('/users')) return 'platform_users';
+    if (cleanPath.endsWith('/broadcasts')) return 'broadcasts';
+    return 'subscribers';
+  };
+
+  const [activeTab, setActiveTabState] = useState<PlatformTabType>(() => getPlatformTabFromPath(window.location.pathname));
+
+  const setActiveTab = (tab: PlatformTabType) => {
+    setActiveTabState(tab);
+    const targetPath = platformTabToPath[tab] || '/platform/subscribers';
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({ tab }, '', targetPath);
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveTabState(getPlatformTabFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const [tenants, setTenants] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
