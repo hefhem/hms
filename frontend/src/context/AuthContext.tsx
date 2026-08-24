@@ -23,17 +23,24 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('hms_user');
-    return saved ? JSON.parse(saved) : null;
-  });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('hms_token'));
+  const [user, setUser] = useState<User | null>(() => {
+    const savedToken = localStorage.getItem('hms_token');
+    const savedUser = localStorage.getItem('hms_user');
+    if (!savedToken || !savedUser) return null;
+    try {
+      return JSON.parse(savedUser);
+    } catch {
+      return null;
+    }
+  });
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     if (token) {
       refreshUser().finally(() => setIsLoading(false));
     } else {
+      setUser(null);
       setIsLoading(false);
     }
   }, []);
@@ -44,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(res.data);
       localStorage.setItem('hms_user', JSON.stringify(res.data));
     } catch (err: any) {
-      if (err.response?.status === 401) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
         logout();
       }
     }

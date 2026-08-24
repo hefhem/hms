@@ -101,8 +101,16 @@ const MainContent: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-cyan-400 font-mono text-sm">
-        Initializing HMS Enterprise Care...
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-600/15 blur-[120px] rounded-full pointer-events-none" />
+        <div className="flex flex-col items-center gap-3 relative z-10">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-950 animate-pulse">
+            <span className="w-3 h-3 rounded-full bg-white animate-ping" />
+          </div>
+          <span className="text-xs font-mono font-bold text-cyan-400 tracking-wider">
+            Initializing HMS Enterprise Care...
+          </span>
+        </div>
       </div>
     );
   }
